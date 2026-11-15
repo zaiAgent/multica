@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multica 改进架构设计书 · Multica-NG（落地系列 第 3 册）</title>
+<meta name="description" content="基于 Multica 现状与 Paperclip / Symphony / Claude Managed Agents 等 Managed Agents 赛道最佳实践，为 Multica 设计的六大子域改进架构：预算成本治理、工作流运行时、记忆上下文层、治理审计审批、外部系统交接、CI 护航，含变更登记清单与三阶段实施路线图。">
+<style>
+/* ============ 基础与变量（延续系列 DM-1 深青设计系统） ============ */
+:root{
+  --accent:#1B6B7A; --accent-deep:#0F3A42; --accent-dark:#0B2C33; --accent-soft:#E4EFF1;
+  --ink:#1C2B2E; --ink2:#51666B; --line:#D7E3E5; --bg:#F5F8F8; --paper:#FFFFFF;
+  --ok:#2E7D32; --ok-soft:#E8F3E9; --warn:#9A5B00; --warn-soft:#FBF1DF; --bad:#B3261E; --bad-soft:#FBEAE8;
+  --new:#8A4B12; --new-soft:#FBF1DF; --ext:#1B6B7A; --ext-soft:#E4EFF1;
+  --code-bg:#0F2E33; --code-ink:#D9E8EA;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:15.5px;line-height:1.85;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+img{max-width:100%}
+h1,h2,h3,h4{line-height:1.4;color:var(--ink);font-weight:700}
+p{margin:.7em 0}
+ul,ol{padding-left:1.5em;margin:.6em 0}
+li{margin:.28em 0}
+strong{color:var(--accent-deep)}
+
+/* ============ 阅读进度条 ============ */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:60}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#4E9AA8);transition:width .15s}
+
+/* ============ 侧栏 ============ */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:284px;background:var(--accent-dark);color:#B9CFD4;overflow-y:auto;z-index:50;padding:0 0 18px;scrollbar-width:thin;scrollbar-color:#2E5A64 transparent}
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-thumb{background:#2E5A64}
+.side-head{padding:26px 22px 16px;border-bottom:1px solid rgba(255,255,255,.12)}
+.side-series{font-size:11px;letter-spacing:.12em;color:#6E9AA5;text-transform:uppercase;margin-bottom:6px}
+.side-title{font-size:16.5px;font-weight:700;color:#fff;line-height:1.45}
+.side-sub{font-size:11.5px;color:#8FB2B9;margin-top:4px}
+.toc{padding:14px 12px 8px}
+.toc-group{font-size:10.5px;letter-spacing:.14em;color:#5E8994;margin:16px 10px 6px;text-transform:uppercase}
+.toc a{display:flex;align-items:baseline;gap:8px;padding:6px 12px;border-radius:7px;color:#AFC9CF;font-size:13px;line-height:1.45;text-decoration:none}
+.toc a:hover{background:rgba(255,255,255,.07);color:#fff;text-decoration:none}
+.toc a.on{background:rgba(255,255,255,.13);color:#fff;font-weight:600}
+.toc a .no{flex:none;font-family:var(--mono);font-size:10.5px;color:#5E8994;width:20px}
+.toc a.on .no{color:#7FC1CC}
+.toc a .prio{flex:none}
+.side-foot{margin:18px 16px 0;padding:14px 14px 12px;background:rgba(255,255,255,.06);border-radius:10px}
+.side-foot .sf-t{font-size:11.5px;color:#8FB2B9;margin-bottom:8px;display:flex;justify-content:space-between}
+.side-foot .sf-bar{height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden}
+.side-foot .sf-bar i{display:block;height:100%;width:0;background:#57B26B;border-radius:3px}
+.side-foot .sf-n{font-size:11px;color:#6E9AA5;margin-top:6px}
+.side-foot .reset{font-size:11px;color:#7FA9B2;cursor:pointer;text-decoration:underline;float:right}
+.side-foot .reset:hover{color:#fff}
+
+/* ============ 布局 ============ */
+.layout{margin-left:284px}
+.content{max-width:920px;margin:0 auto;padding:0 34px 90px}
+.hamburger{display:none}
+.toolbar{position:fixed;right:22px;bottom:26px;display:flex;flex-direction:column;gap:10px;z-index:55}
+.toolbar button{border:none;border-radius:10px;padding:10px 15px;font-size:13px;font-family:var(--sans);cursor:pointer;background:var(--accent-deep);color:#fff;box-shadow:0 4px 14px rgba(15,58,66,.35)}
+.toolbar button:hover{background:var(--accent)}
+.to-top{padding:10px 13px!important}
+
+/* ============ 封面 Hero ============ */
+.hero{margin:30px 0 34px;background:linear-gradient(148deg,var(--accent-dark) 0%,var(--accent-deep) 52%,#15525D 100%);border-radius:18px;color:#DCEBEE;padding:46px 46px 40px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-90px;top:-90px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(94,164,177,.22),transparent 65%)}
+.hero-series{display:inline-block;font-size:11.5px;letter-spacing:.18em;color:#7FC1CC;border:1px solid rgba(127,193,204,.4);border-radius:99px;padding:4px 14px;margin-bottom:18px}
+.hero h1{font-size:33px;color:#fff;margin:0 0 10px;line-height:1.32}
+.hero .hero-sub{font-size:15.5px;color:#A9C9CF;margin:0 0 22px;max-width:660px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:26px}
+.hero-meta span{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:5px 13px;font-size:12.5px;color:#C6DCE0}
+.hero-meta b{color:#fff;font-weight:600}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+.hero-cta a,.hero-cta button{display:inline-block;background:#fff;color:var(--accent-deep);font-weight:700;font-size:14.5px;border-radius:10px;padding:11px 24px;border:none;cursor:pointer;font-family:var(--sans);text-decoration:none}
+.hero-cta a:hover,.hero-cta button:hover{background:#DDEDEF}
+.hero-cta .ghost{background:transparent;color:#CFE4E8;border:1px solid rgba(255,255,255,.35);font-weight:500}
+.hero-cta .ghost:hover{background:rgba(255,255,255,.1)}
+.hero-note{margin-top:22px;font-size:12.5px;color:#8FB2B9}
+.hero-note b{color:#C6DCE0}
+
+/* ============ 章节 ============ */
+.chap{margin-top:26px;padding-top:26px;border-top:1px solid var(--line)}
+.chap h2{font-size:25px;margin:6px 0 4px;letter-spacing:.01em}
+.chap h2 .cno{display:inline-block;font-family:var(--mono);font-size:13px;background:var(--accent);color:#fff;border-radius:7px;padding:3px 10px;vertical-align:4px;margin-right:12px}
+.chap .lead{color:var(--ink2);font-size:14.5px;margin-bottom:14px}
+.chap h3{font-size:18.5px;color:var(--accent-deep);margin:34px 0 8px;padding-left:13px;border-left:4px solid var(--accent)}
+.chap h4{font-size:15.5px;margin:22px 0 6px}
+.mini-toc{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:14px 0 6px;font-size:13px}
+.mini-toc b{color:var(--accent-deep);font-size:12px;letter-spacing:.08em}
+.mini-toc ol{margin:6px 0 2px;padding-left:1.4em;list-style:decimal}
+.mini-toc li{margin:2px 0}
+.mini-toc a{color:var(--ink2)}
+.mini-toc a:hover{color:var(--accent)}
+
+/* ============ 优先级徽标 / 域徽标 ============ */
+.prio{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;border-radius:5px;padding:1px 8px;vertical-align:1px;letter-spacing:.05em}
+.prio.p0{background:var(--bad-soft);color:var(--bad);border:1px solid #E9CFCB}
+.prio.p1{background:var(--warn-soft);color:var(--warn);border:1px solid #E8D5AC}
+.prio.p2{background:var(--ext-soft);color:var(--ext);border:1px solid #C4DBE0}
+.dom-tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:4px;padding:0 7px;margin-right:6px;vertical-align:1px}
+.dom-tag.a{background:#FBEAE8;color:#8A2A22}
+.dom-tag.b{background:#E4EFF1;color:#0F3A42}
+.dom-tag.c{background:#EDE9F6;color:#5B4A8A}
+.dom-tag.d{background:#FBF1DF;color:#7A5200}
+.dom-tag.e{background:#E3F0E7;color:#2E5C34}
+.dom-tag.f{background:#E7EDF5;color:#2E4A6B}
+.dom-tag.x{background:#F0F4F4;color:#4A5E62}
+
+/* ============ 六域总览卡 ============ */
+.dom-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0}
+.dom-card{background:var(--paper);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:12px;padding:14px 17px;break-inside:avoid}
+.dom-card .dc-head{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.dom-card .dc-head b{font-size:15px;color:var(--accent-deep)}
+.dom-card .dc-head .prio{margin-left:auto}
+.dom-card p{margin:2px 0;font-size:13px;color:var(--ink2);line-height:1.7}
+.dom-card .dc-src{margin-top:8px;font-size:11.8px;color:#7A8F94;border-top:1px dashed var(--line);padding-top:7px}
+.dom-card .dc-src b{color:#51666B;font-weight:600}
+
+/* ============ 统计面板 ============ */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:16px 0}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:13px 10px 11px;text-align:center;break-inside:avoid}
+.stat b{display:block;font-size:23px;color:var(--accent);font-weight:800;line-height:1.2;font-family:var(--mono)}
+.stat span{display:block;font-size:11.8px;color:var(--ink2);margin-top:3px;line-height:1.5}
+.stat small{display:block;font-size:10.5px;color:#8FA3A7;margin-top:2px}
+
+/* ============ 架构分层图 D1 ============ */
+.layer-stack{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 20px 14px;margin:18px 0;break-inside:avoid}
+.ls-title{text-align:center;font-weight:700;color:var(--accent-deep);font-size:15px;margin-bottom:4px;letter-spacing:.04em}
+.ls-sub{text-align:center;font-size:11.8px;color:var(--ink2);margin-bottom:14px}
+.ly{display:grid;grid-template-columns:168px 1fr;border:1px solid var(--line);border-radius:10px;margin:7px 0;overflow:hidden}
+.ly-h{padding:10px 13px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;gap:3px}
+.ly-h b{font-size:13.5px;color:var(--accent-deep)}
+.ly-h i{font-style:normal;font-size:10.5px;color:var(--ink2);line-height:1.5}
+.ly-h .st{align-self:flex-start;font-size:10px;font-weight:700;border-radius:4px;padding:1px 8px;margin-top:2px}
+.st.new{background:var(--new-soft);color:var(--new);border:1px solid #E8D5AC}
+.st.ext{background:var(--ext-soft);color:var(--ext);border:1px solid #C4DBE0}
+.st.keep{background:var(--ok-soft);color:var(--ok);border:1px solid #CBE3CD}
+.ly-b{display:flex;flex-wrap:wrap;gap:7px;padding:11px 13px;align-items:center}
+.lb{border-radius:7px;padding:4px 11px;font-size:12px;line-height:1.5;border:1px solid var(--line);background:#FBFDFD;color:var(--ink)}
+.lb.keep{border-color:#BFDCC2;background:#F4F9F5;color:#275C2B}
+.lb.ext{border-color:#A9CBD3;background:#EEF6F7;color:#0F3A42}
+.lb.new{border-color:#D9B678;background:#FCF6E8;color:#6E4300;font-weight:600}
+.lb small{display:block;font-size:10px;color:#8FA3A7;font-weight:400}
+.ly-bus{margin-top:10px;border-radius:9px;padding:9px 14px;background:var(--accent-deep);color:#CFE4E8;font-size:12.5px;text-align:center;line-height:1.6}
+.ly-bus b{color:#fff}
+.ls-legend{display:flex;gap:16px;justify-content:center;margin-top:12px;font-size:11.5px;color:var(--ink2);flex-wrap:wrap}
+.ls-legend i{font-style:normal;display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid}
+.ls-legend .l-new{background:#FCF6E8;border-color:#D9B678}
+.ls-legend .l-ext{background:#EEF6F7;border-color:#A9CBD3}
+.ls-legend .l-keep{background:#F4F9F5;border-color:#BFDCC2}
+
+/* ============ 状态机 / 流程图 ============ */
+.smdiag{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;margin:18px 0;break-inside:avoid}
+.sm-title{text-align:center;font-weight:700;color:var(--accent-deep);font-size:15px;margin-bottom:14px}
+.sm-row{display:flex;flex-wrap:wrap;align-items:stretch;justify-content:center;gap:0;margin:6px 0}
+.sm-state{border-radius:9px;padding:8px 16px;font-size:12.5px;font-weight:600;text-align:center;min-width:96px;line-height:1.5}
+.sm-state small{display:block;font-size:10.5px;font-weight:400;opacity:.85}
+.sm-state.ok{background:var(--ok-soft);color:#275C2B;border:1.5px solid #BFDCC2}
+.sm-state.warn{background:var(--warn-soft);color:#7A5200;border:1.5px solid #E8D5AC}
+.sm-state.bad{background:var(--bad-soft);color:#8A2A22;border:1.5px solid #E9CFCB}
+.sm-state.info{background:var(--ext-soft);color:#0F3A42;border:1.5px solid #A9CBD3}
+.sm-arr{display:flex;flex-direction:column;justify-content:center;padding:0 7px;text-align:center}
+.sm-arr i{font-style:normal;color:var(--accent);font-size:15px;line-height:1}
+.sm-arr small{font-size:9.8px;color:var(--ink2);line-height:1.3;max-width:86px}
+.sm-back{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:9px;padding:6px 10px;border:1.5px dashed #C9A0A0;background:#FDF7F6;border-radius:8px;font-size:11.5px;color:#8A2A22}
+.sm-back i{font-style:normal;font-family:var(--mono)}
+
+/* ============ DAG 工作流图 D4 ============ */
+.dag{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;margin:18px 0;break-inside:avoid}
+.dag-title{text-align:center;font-weight:700;color:var(--accent-deep);font-size:15px;margin-bottom:4px}
+.dag-sub{text-align:center;font-size:11.8px;color:var(--ink2);margin-bottom:14px}
+.dag-node{max-width:400px;margin:0 auto;border:1.5px solid #A9CBD3;background:#EEF6F7;color:#0F3A42;border-radius:9px;padding:7px 15px;font-size:12.5px;font-weight:600;text-align:center;line-height:1.5}
+.dag-node small{display:block;font-size:10.5px;color:#51666B;font-weight:400}
+.dag-node.start{background:var(--accent-deep);color:#fff;border-color:var(--accent-deep)}
+.dag-node.start small{color:#AFC9CF}
+.dag-node.human{border-color:#D9B678;background:#FCF6E8;color:#6E4300}
+.dag-node.gw{border-radius:5px;border-color:#B7A6D9;background:#EDE9F6;color:#4A3A78;font-family:var(--mono);font-size:12px}
+.dag-node.end{background:var(--ok-soft);border-color:#BFDCC2;color:#275C2B}
+.dag-node.var{background:#FBF1DF;border-color:#E8D5AC;color:#7A5200}
+.dag-v{max-width:340px;margin:0 auto;text-align:center;color:var(--accent);font-size:16px;line-height:1.1;padding:2px 0}
+.dag-v small{display:block;font-family:var(--sans);font-size:10px;color:var(--ink2)}
+.dag-fan{display:flex;justify-content:center;gap:10px;margin:2px 0}
+.dag-fan .dag-node{max-width:200px;flex:1;font-size:11.5px;padding:6px 9px}
+.dag-loop{max-width:520px;margin:10px auto 0;padding:7px 12px;border:1.5px dashed #C9A0A0;background:#FDF7F6;border-radius:8px;font-size:11.5px;color:#8A2A22;text-align:center}
+.dag-loop b{font-family:var(--mono)}
+
+/* ============ 记忆双层图 D5 ============ */
+.memstack{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;margin:18px 0;break-inside:avoid}
+.mem-title{text-align:center;font-weight:700;color:var(--accent-deep);font-size:15px;margin-bottom:14px}
+.mem-layers{display:grid;grid-template-columns:1fr 46px 1fr;gap:10px;align-items:stretch}
+.mem-l{border:1.5px solid #A9CBD3;border-radius:10px;padding:11px 14px;background:#EEF6F7}
+.mem-l h5{margin:0 0 6px;font-size:13px;color:#0F3A42}
+.mem-l p{margin:0;font-size:11.8px;color:#4A5E62;line-height:1.65}
+.mem-l.l2{border-color:#B7A6D9;background:#EDE9F6}
+.mem-l.l2 h5{color:#4A3A78}
+.mem-join{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--accent)}
+.mem-join i{font-style:normal;font-size:14px}
+.mem-join small{font-size:9.5px;color:var(--ink2);text-align:center;line-height:1.3}
+.pipe{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin-top:15px;padding-top:13px;border-top:1px dashed var(--line)}
+.pipe .pv{border-radius:8px;border:1px solid var(--line);background:#FBFDFD;padding:5px 13px;font-size:12px;font-weight:600;color:var(--accent-deep);text-align:center;line-height:1.4}
+.pipe .pv small{display:block;font-size:9.8px;color:var(--ink2);font-weight:400}
+.pipe .pa{color:var(--accent);font-size:13px;padding:0 2px}
+.pipe .pv.out{background:var(--accent-deep);color:#fff;border-color:var(--accent-deep)}
+.pipe .pv.out small{color:#AFC9CF}
+
+/* ============ 泳道路线图 D6 ============ */
+.lanes{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;margin:18px 0;break-inside:avoid}
+.lanes-title{text-align:center;font-weight:700;color:var(--accent-deep);font-size:15px;margin-bottom:14px}
+.lane-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.lane{border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#FBFDFD;display:flex;flex-direction:column;gap:8px}
+.lane h5{margin:0;text-align:center;font-size:13px;color:var(--accent-deep);border-bottom:2px solid var(--accent);padding-bottom:7px}
+.lane h5 small{display:block;font-family:var(--mono);font-size:10px;color:var(--ink2);font-weight:400;margin-top:2px}
+.lane .mi{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11.8px;line-height:1.55;background:#fff}
+.lane .mi b{display:block;font-size:12px;color:var(--accent-deep)}
+.lane .mi .prio{float:right}
+.lane .gate{margin-top:auto;border-radius:8px;padding:7px 10px;font-size:11.3px;background:var(--ok-soft);color:#275C2B;border:1px solid #CBE3CD;line-height:1.6}
+.lane .gate b{font-size:10px;letter-spacing:.08em;display:block;color:var(--ok)}
+.lane.l2x{border-color:#D9B678}
+.lane.l2x h5{border-bottom-color:#B8860B}
+.lane.l3x{border-color:#A9CBD3}
+
+/* ============ 生命周期横条 ============ */
+.lifecycle{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px;margin:12px 0;padding:12px;background:var(--paper);border:1px solid var(--line);border-radius:12px;break-inside:avoid}
+.lc-st{border-radius:99px;border:1px solid #A9CBD3;background:#EEF6F7;color:#0F3A42;font-family:var(--mono);font-size:11px;padding:3px 11px;white-space:nowrap}
+.lc-st.hot{background:var(--accent);color:#fff;border-color:var(--accent)}
+.lc-sep{color:var(--accent);font-size:12px}
+
+/* ============ 保留不动 / 非目标 ============ */
+.keep-box{background:#F4F9F5;border:1px solid #CBE3CD;border-left:5px solid var(--ok);border-radius:12px;padding:15px 19px 11px;margin:16px 0;break-inside:avoid}
+.keep-box .kb-t{font-weight:700;color:var(--ok);font-size:14.5px;margin-bottom:8px}
+.keep-box ul{margin:4px 0;padding-left:1.3em;list-style:none}
+.keep-box li{margin:4px 0;font-size:13.8px;position:relative;padding-left:4px}
+.keep-box li::before{content:"✓";color:var(--ok);font-weight:700;margin-right:8px}
+.nongoal{background:#F6F7F7;border:1px dashed #B9C6C8;border-left:5px solid #7A8F94;border-radius:12px;padding:15px 19px 11px;margin:16px 0;break-inside:avoid}
+.nongoal .ng-t{font-weight:700;color:#4A5E62;font-size:14.5px;margin-bottom:8px}
+.nongoal ul{margin:4px 0;padding-left:1.3em;list-style:none}
+.nongoal li{margin:4px 0;font-size:13.8px}
+.nongoal li::before{content:"✗";color:#7A8F94;font-weight:700;margin-right:8px}
+
+/* ============ 提示 / 代码块 ============ */
+.note{border-radius:10px;padding:13px 17px;margin:14px 0;font-size:13.8px;break-inside:avoid}
+.note.info{background:var(--accent-soft);border:1px solid #C4DBE0;color:#17454E}
+.note.warn{background:var(--warn-soft);border:1px solid #E8D5AC;color:#6E4300}
+.note b{color:inherit}
+.codeblk{position:relative;background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:15px 18px 15px;overflow-x:auto;font-family:var(--mono);font-size:12.8px;line-height:1.75;margin:12px 0 12px;border:1px solid #123C44;white-space:pre;max-width:100%}
+.codeblk::before{content:"";position:absolute;top:0;right:0;left:0;height:34px;background:linear-gradient(to bottom,rgba(255,255,255,.05),transparent);pointer-events:none;border-radius:10px 10px 0 0}
+.codeblk .cmt{color:#6E98A2}
+.codeblk .k{color:#8FD0A0}
+.copy-btn{position:absolute;top:8px;right:10px;background:rgba(255,255,255,.14);color:#CFE4E8;border:1px solid rgba(255,255,255,.18);border-radius:6px;font-size:11px;font-family:var(--sans);padding:3px 11px;cursor:pointer;opacity:.85}
+.copy-btn:hover{opacity:1;background:rgba(255,255,255,.22)}
+.copy-btn.done{background:#2E7D32;color:#fff;opacity:1}
+.cap{font-size:12px;color:var(--ink2);margin:-6px 0 12px}
+code.inl{font-family:var(--mono);font-size:12.5px;background:var(--accent-soft);color:var(--accent-deep);border-radius:4px;padding:1px 6px;white-space:nowrap}
+
+/* ============ 折叠细节 ============ */
+details.deep{border:1px dashed var(--line);border-radius:9px;margin:12px 0;background:var(--paper)}
+details.deep summary{cursor:pointer;list-style:none;padding:9px 15px;font-size:13.5px;font-weight:600;color:var(--ink2)}
+details.deep summary::-webkit-details-marker{display:none}
+details.deep summary::before{content:"＋ ";color:var(--accent)}
+details.deep[open] summary::before{content:"－ "}
+details.deep .deep-body{padding:2px 16px 12px;font-size:13.5px}
+
+/* ============ 表格 ============ */
+.tbl-wrap{overflow-x:auto;margin:14px 0;border-radius:10px;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;background:var(--paper);font-size:13.3px}
+th{background:var(--accent-deep);color:#fff;text-align:left;padding:9px 13px;font-weight:600;white-space:nowrap}
+td{padding:8px 13px;border-top:1px solid var(--line);vertical-align:top}
+tbody tr:nth-child(even){background:#F4F8F8}
+table code{font-family:var(--mono);font-size:11px;background:var(--accent-soft);color:var(--accent-deep);border-radius:4px;padding:1px 5px;white-space:normal;word-break:break-word}
+.tbl-cap{font-size:12px;color:var(--ink2);margin:-8px 0 12px}
+td .tag{display:inline-block;font-size:10.5px;border-radius:4px;padding:0 7px;font-weight:600}
+.tag.b{background:var(--accent-soft);color:var(--accent-deep)}
+.tag.f{background:#EEE6F6;color:#6B4FA0}
+.tag.q{background:var(--ok-soft);color:var(--ok)}
+.tag.h{background:#FBF1DF;color:var(--warn)}
+
+/* ============ 附录徽标 & 页脚 ============ */
+.apx-badge{display:inline-block;font-size:11px;font-weight:700;background:var(--accent-deep);color:#fff;border-radius:6px;padding:2px 10px;margin-right:9px;vertical-align:2px}
+.footer{margin-top:50px;padding:22px 0 8px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink2)}
+.footer b{color:var(--accent-deep)}
+.back2top{font-size:12.5px;float:right}
+
+/* ============ 变更登记表（附录A） ============ */
+.reg-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+.reg-tools .rt-l{font-size:12.5px;color:var(--ink2);font-weight:600;margin-right:2px}
+.reg-btn{border:1px solid var(--line);background:var(--paper);color:var(--ink2);border-radius:99px;font-size:12px;font-family:var(--sans);padding:4px 14px;cursor:pointer}
+.reg-btn:hover{border-color:var(--accent);color:var(--accent)}
+.reg-btn.on{background:var(--accent-deep);color:#fff;border-color:var(--accent-deep)}
+.reg-cnt{margin-left:auto;font-size:12px;color:var(--ink2)}
+tr.reg-hidden{display:none}
+td .regbox{width:16px;height:16px;accent-color:var(--ok);cursor:pointer;vertical-align:middle}
+tr.reg-done td{color:#8FA3A7}
+tr.reg-done td .reg-txt{text-decoration:line-through;text-decoration-color:#9DBBA1}
+.reg-id{font-family:var(--mono);font-size:11px;color:var(--ink2);white-space:nowrap}
+
+/* ============ 移动端 ============ */
+@media (max-width:980px){
+  .sidebar{transform:translateX(-100%);transition:transform .25s;width:300px}
+  .sidebar.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.4)}
+  .layout{margin-left:0}
+  .content{padding:0 18px 70px}
+  .hamburger{display:block;position:fixed;top:12px;left:12px;z-index:56;background:var(--accent-deep);color:#fff;border:none;border-radius:9px;padding:9px 15px;font-size:13px;cursor:pointer;font-family:var(--sans);box-shadow:0 3px 12px rgba(15,58,66,.35)}
+  .hero{padding:32px 24px;border-radius:14px}
+  .hero h1{font-size:25px}
+  .dom-grid{grid-template-columns:1fr}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .ly{grid-template-columns:1fr}
+  .ly-h{border-right:none;border-bottom:1px solid var(--line)}
+  .lane-cols{grid-template-columns:1fr}
+  .mem-layers{grid-template-columns:1fr}
+  .mem-join{flex-direction:row;justify-content:center}
+  .dag-fan{flex-direction:column}
+  .dag-fan .dag-node{max-width:none}
+  .toolbar{right:14px;bottom:16px}
+}
+
+/* ============ 打印 ============ */
+@media print{
+  @page{size:A4;margin:15mm 13mm}
+  body{background:#fff;font-size:10.6pt;line-height:1.7}
+  .sidebar,.hamburger,.toolbar,.progress,.copy-btn,.hero-cta,.reg-tools,.back2top{display:none!important}
+  .layout{margin:0}
+  .content{max-width:100%;padding:0}
+  .hero{border-radius:0;color:#11302F;background:#fff;border:2.5px solid var(--accent-deep)}
+  .hero h1{color:var(--accent-deep)}
+  .hero .hero-sub,.hero .hero-note{color:#4A5E62}
+  .hero-meta span{border-color:#C4DBE0;color:#2A4E56;background:#EFF5F6}
+  .hero-meta b{color:var(--accent-deep)}
+  .hero-series{color:var(--accent-deep);border-color:var(--accent)}
+  .chap{page-break-before:always;border-top:none;margin-top:0;padding-top:0}
+  .chap:first-of-type{page-break-before:auto}
+  h3{page-break-after:avoid}
+  .dom-card,.note,.keep-box,.nongoal,.codeblk,.tbl-wrap,.layer-stack,.smdiag,.dag,.memstack,.lanes,.lifecycle,.stat-grid,.dom-grid,details.deep{break-inside:avoid}
+  .codeblk{white-space:pre-wrap;word-break:break-all;font-size:9pt}
+  table{font-size:8.8pt}
+  th{padding:6px 9px}
+  td{padding:5px 9px}
+  details{page-break-inside:avoid}
+  .footer{page-break-before:avoid}
+}
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="pbar"></div></div>
+<button class="hamburger" id="hamburger">☰ 目录</button>
+
+<aside class="sidebar" id="sidebar">
+  <div class="side-head">
+    <div class="side-series">Multica 落地系列 · 第 3 册</div>
+    <div class="side-title">Multica 改进架构设计书</div>
+    <div class="side-sub">内部代号 Multica-NG · 概念级蓝图 · 六大子域</div>
+  </div>
+  <nav class="toc" id="toc">
+    <div class="toc-group">开始之前</div>
+    <a href="#ch0"><span class="no">00</span>设计总览与阅读指南</a>
+    <div class="toc-group">第一部分 · 诊断</div>
+    <a href="#ch1"><span class="no">01</span>背景与动机：为什么改</a>
+    <a href="#ch2"><span class="no">02</span>现状基线与保留不动清单</a>
+    <div class="toc-group">第二部分 · 蓝图</div>
+    <a href="#ch3"><span class="no">03</span>总体目标架构（六层蓝图）</a>
+    <div class="toc-group">第三部分 · 六大子域</div>
+    <a href="#ch4"><span class="no">A</span>预算与成本治理 <span class="prio p0">P0</span></a>
+    <a href="#ch5"><span class="no">B</span>工作流运行时 <span class="prio p0">P0</span></a>
+    <a href="#ch6"><span class="no">C</span>记忆与上下文层 <span class="prio p1">P1</span></a>
+    <a href="#ch7"><span class="no">D</span>治理审计与审批 <span class="prio p1">P1</span></a>
+    <a href="#ch8"><span class="no">E</span>外部系统交接 <span class="prio p2">P2</span></a>
+    <a href="#ch9"><span class="no">F</span>CI 护航 <span class="prio p2">P2</span></a>
+    <div class="toc-group">第四部分 · 落地</div>
+    <a href="#ch10"><span class="no">10</span>非功能设计</a>
+    <a href="#ch11"><span class="no">11</span>迁移与兼容策略</a>
+    <a href="#ch12"><span class="no">12</span>实施路线图与人力估算</a>
+    <div class="toc-group">附录</div>
+    <a href="#apx-a"><span class="no">A</span>变更登记清单（可勾选）</a>
+    <a href="#apx-b"><span class="no">B</span>人机分工 RACI</a>
+    <a href="#apx-c"><span class="no">C</span>术语表与三册对照</a>
+  </nav>
+  <div class="side-foot">
+    <div class="sf-t"><span>变更项落地进度</span><span class="reset" id="reset-progress">重置</span></div>
+    <div class="sf-bar"><i id="sf-bar"></i></div>
+    <div class="sf-n" id="sf-n">0 / 0 项已完成</div>
+  </div>
+</aside>
+
+<div class="layout">
+<main class="main">
+<div class="content">
+
+<header class="hero" id="top">
+  <div class="hero-series">MULTICA 落地系列 · 第 3 册（架构篇）</div>
+  <h1>Multica 改进架构设计书<br>—— 从 Managed Agents 到 Governed Workflows</h1>
+  <p class="hero-sub">基于 Multica 现状与 2026 年 Managed Agents 赛道最佳实践（Paperclip 的预算治理、OpenAI Symphony 的工作流与 CI 护航、Claude Managed Agents 的企业管控、一线团队二次开发的「AI 军团」经验），为 Multica 设计的一份概念级改进蓝图：六大子域、六层架构、三阶段落地，不推翻现有系统，只做叠加式演进。</p>
+  <div class="hero-meta">
+    <span>内部代号 <b>Multica-NG</b></span>
+    <span>改进方向 <b>六大子域（P0–P2 分级）</b></span>
+    <span>深度 <b>概念级蓝图</b></span>
+    <span>读者 <b>研发实现团队</b></span>
+    <span>篇幅 <b>约 1 万字 · 25–35 页</b></span>
+    <span>配套 <b>Markdown 版（可进 git）</b></span>
+  </div>
+  <div class="hero-cta">
+    <a href="#ch0">从设计总览开始 ↓</a>
+    <button onclick="window.print()">打印 / 导出 PDF</button>
+    <a class="ghost" href="#apx-a">直接看变更登记清单</a>
+  </div>
+  <p class="hero-note"><b>如何使用本设计书：</b>① 决策者读第 1、3、12 章即可形成判断；实现者建议通读，并把附录 A 变更登记清单作为落地跟踪表逐项勾选；② 全部架构图为原生 HTML 绘制，打印/投屏不糊；③ 姊妹篇：《Multica 自部署使用与运维手册》（第 1 册·原理与运维）、《从 0 到 1 实操 Demo 教程》（第 2 册·动手跑通例程），本册在其之上回答「跑起来之后，往哪里改、怎么改」。</p>
+</header>
+
+
+<!-- ==================== 第 0 章 设计总览 ==================== -->
+<section class="chap" id="ch0">
+<h2><span class="cno">00</span>设计总览与阅读指南</h2>
+<p class="lead">Multica-NG 不是重写 Multica，而是在其之上补齐「治理、编排、记忆」三块企业级拼图。本章先给出全景：为什么是这六个方向、它们各自解决什么问题、按什么顺序落地。</p>
+
+<div class="stat-grid">
+  <div class="stat"><b>6</b><span>改进子域</span><small>A–F · P0/P1/P2 分级</small></div>
+  <div class="stat"><b>21</b><span>新增核心概念</span><small>详见附录 A 变更登记</small></div>
+  <div class="stat"><b>3</b><span>实施阶段</span><small>约 16–20 周 · 290 人日</small></div>
+  <div class="stat"><b>0</b><span>破坏性变更</span><small>全部叠加式演进</small></div>
+</div>
+
+<h3>0.1 六大改进方向一览</h3>
+<div class="dom-grid">
+  <div class="dom-card">
+    <div class="dc-head"><span class="dom-tag a">子域 A</span><b>预算与成本治理</b><span class="prio p0">P0</span></div>
+    <p>给每一次运行装上「钱」的护栏：四级预算对象、成本事件流、80% 预警 / 100% 熔断 / 人工恢复状态机。让超支在发生前被拦住，而不是月底看账单才发现。</p>
+    <div class="dc-src">主要借鉴 <b>Paperclip</b>（按 agent 硬预算与熔断）、<b>Claude Managed Agents</b>（会话预算硬顶）</div>
+  </div>
+  <div class="dom-card">
+    <div class="dc-head"><span class="dom-tag b">子域 B</span><b>工作流运行时</b><span class="prio p0">P0</span></div>
+    <p>把现有「单线状态机 + 列交接」的 Workflows 升级为有向图运行时：并行分支、条件网关、结构化准出裁定（Verdict）、定向返工。下游节点消费裁定字段，不再解析自然语言。</p>
+    <div class="dc-src">主要借鉴 <b>OpenAI Symphony</b>（DAG 依赖 + 状态机）、<b>「AI 军团」二次开发案例</b>（Template/Node/Edge + Verdict）</div>
+  </div>
+  <div class="dom-card">
+    <div class="dc-head"><span class="dom-tag c">子域 C</span><b>记忆与上下文层</b><span class="prio p1">P1</span></div>
+    <p>在不推翻现有关系型技能库的前提下，增加语义检索层与上下文组装管线：未挂载的技能也能被召回，执行中的新评论能以增量事件进入上下文，快照体积按 token 预算装箱。</p>
+    <div class="dc-src">主要借鉴社区对 Multica 记忆模型的批评与 <b>mem0</b> 式上下文层思路</div>
+  </div>
+  <div class="dom-card">
+    <div class="dc-head"><span class="dom-tag d">子域 D</span><b>治理审计与审批</b><span class="prio p1">P1</span></div>
+    <p>append-only 审计账本（哈希链防篡改）、可挂在任意节点前的审批门禁、工具级权限策略（allow / deny / ask / auto）。让「谁批准的、谁驳回的、花了多少」永远可回答。</p>
+    <div class="dc-src">主要借鉴 <b>Claude Managed Agents</b>（auto 权限评估）、<b>Paperclip</b>（不可变审计日志与董事会治理）</div>
+  </div>
+  <div class="dom-card">
+    <div class="dc-head"><span class="dom-tag e">子域 E</span><b>外部系统交接</b><span class="prio p2">P2</span></div>
+    <p>双向 Hook 打通需求 / 缺陷 / 验收系统：外部事件按模板路由进工作流，完成后状态回写、验收结果回流。幂等、重放、对账三机制保证交接不丢不重。</p>
+    <div class="dc-src">主要借鉴 <b>「AI 军团」案例</b>（外部可交接骨架：Hook 进 / 结果出 / 验收回流）</div>
+  </div>
+  <div class="dom-card">
+    <div class="dc-head"><span class="dom-tag f">子域 F</span><b>CI 护航</b><span class="prio p2">P2</span></div>
+    <p>专职守护智能体盯住 PR 最后一公里：CI 失败分类（真失败 / flaky / 冲突）、自动重试与 rebase、冲突复杂度评估，处理不了的带着失败上下文定向派回原节点。合并决定权永远在人。</p>
+    <div class="dc-src">主要借鉴 <b>OpenAI Symphony</b>（watch CI / rebases / resolves conflicts / retries flaky）</div>
+  </div>
+</div>
+
+<h3>0.2 全书结构与阅读路径</h3>
+<div class="mini-toc">
+  <b>四部分 + 三附录</b>
+  <ol>
+    <li><b>第一部分 · 诊断</b>（第 1–2 章）：为什么改、现状是什么、哪些坚决不动。</li>
+    <li><b>第二部分 · 蓝图</b>（第 3 章）：六层目标架构总图与概念映射。</li>
+    <li><b>第三部分 · 六大子域</b>（第 4–9 章）：每个子域给出概念模型、状态机 / 流程、接口契约要点与边界，编号即实施优先级。</li>
+    <li><b>第四部分 · 落地</b>（第 10–12 章）：非功能、迁移兼容、三阶段路线图与人力估算。</li>
+    <li><b>附录 A</b> 变更登记清单（可勾选跟踪）· <b>附录 B</b> 人机分工 RACI · <b>附录 C</b> 术语表与三册对照。</li>
+  </ol>
+</div>
+<div class="note info">
+<b>三类读者的最短路径：</b>① <b>技术决策者</b>：第 1 章 → 第 3 章 → 第 12 章，约 15 分钟；② <b>子域负责人</b>：第 3 章通读后直奔自己负责的子域章节 + 附录 A 对应条目；③ <b>实施工程师</b>：全读，以第 11 章迁移策略为操作入口，附录 A 作为 issue 拆解的原始输入（建议直接导入工作区看板，每条变更项即一张卡）。
+</div>
+
+<h3>0.3 与前两册的关系</h3>
+<p>第 1 册《自部署使用与运维手册》解决了「把 Multica 装起来、养起来」；第 2 册《从 0 到 1 实操 Demo 教程》用 LinkLite 短链接例程证明了「一个纯软件产品可以全流程跑在 Multica 上」。跑通之后自然长出三个问题：<b>成本失控怎么办（子域 A）、链路复杂了怎么编排（子域 B–F 的执行侧）、出了事怎么追责（子域 D）</b>。本册正是对这三个问题的系统性回答——所有设计均以「不破坏第 1、2 册已验证的部署面与操作路径」为前提：改动完成后，第 2 册的 LinkLite 例程应能原样重跑，且全程受预算护栏与工作流运行时保护。</p>
+<div class="note warn"><b>定位声明：</b>本册为概念级蓝图（Concept-level Blueprint），面向研发实现团队撰写，但刻意停留在「概念模型 + 契约 + 状态机」层面，不落到具体表字段、迁移编号与文件路径——后者属于详细设计（DDD）阶段，应由各子域负责人在原型验证后补全。文中所有 Multica 现状描述均以官方公开文档与概念模型为准。</div>
+</section>
+
+<!-- ==================== 第 1 章 背景与动机 ==================== -->
+<section class="chap" id="ch1">
+<h2><span class="cno">01</span>背景与动机：为什么改</h2>
+<p class="lead">Multica 已经证明了「agent 作为队友」的日常可用性。但当队列从每天几个任务变成上百个运行、从单智能体变成多小队并行时，四个结构性短板开始收税。</p>
+
+<h3>1.1 四大结构性短板</h3>
+<p><b>短板一：成本没有闭环。</b>Multica 有用量看板（usage / analytics），能看历史消耗，但那是「事后会计」——没有任何对象表达「这个项目本月最多花多少钱」。对比赛道做法：Paperclip 给每个 agent 设月度美元预算，到 80% 预警、到 100% 自动暂停、新任务直接挡在门外；Claude Managed Agents 给每个会话设硬顶，触顶即停而非记账。Multica 目前缺的正是这条「事前闸门」，多智能体并行时尤其危险——失控循环一夜烧掉大量 token 的事故在社区里并不罕见。</p>
+<p><b>短板二：工作流只有单线。</b>现有 Workflows 的模型是「状态列 + 交接」：issue 进入某列触发一次交接，节点完成后「移至下一列」、被拒绝时「退回指定列」。这覆盖了线性交付，但表达不了三件越来越常见的事：<b>并行</b>（一个需求同时拆给后端 / 前端 / 测试用例三个智能体）、<b>条件路由</b>（按风险等级走不同评审深度）、<b>结构化准出</b>（下游只能读自然语言评论来判断上游成败）。OpenAI Symphony 的经验说明后者危害最大：当 agent 输出不稳定时，下游节点消费的应当是结构化裁定（pass / fail / blocked / rework），而不是再次推理一段散文。</p>
+<p><b>短板三：记忆只显式、快照会过期。</b>技能靠 <code class="inl">agent_skill</code> 显式挂载——精确、可控，这是 Multica 的优点，社区分析也证实「人工筛选的相关性往往优于统计相似」；但另一面是：未挂载的技能永远沉睡，任务执行中的新评论进不了已打包的上下文快照，且随着技能库增长（如 200 个技能），快照体积会持续膨胀。一线团队把这类问题总结为「缺乏模糊检索、快照过时、快照随库膨胀」三连。</p>
+<p><b>短板四：治理是旁路而非内建。</p>
+<p>Multica 有活动流（activity_log）与成员角色，但审计不是第一公民：没有防篡改的账本、没有可挂在敏感动作前的审批门禁、没有工具级权限策略。对比 Claude Managed Agents 的 auto 权限模式（服务器逐次评估每个工具调用：放行 / 拒绝 / 暂停等人批准）与 Paperclip 的 append-only 审计（每次工具调用、每个决策点都入不可变日志），「谁批准了这次超预算」「这个返工是谁驳回的」在现版本里只能靠翻评论拼。</p>
+
+<h3>1.2 竞品借鉴矩阵：各取所长，而非全盘照搬</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:15%">来源</th><th style="width:33%">值得借鉴的核心机制</th><th style="width:12%">落入子域</th><th>为何不整体采用</th></tr></thead>
+<tbody>
+<tr><td><b>Paperclip</b><br><small>MIT 开源 · 组织树治理</small></td><td>按 agent / 项目的硬预算与熔断；append-only 审计；心跳调度；审批门禁（董事会模式）</td><td><span class="dom-tag a">A</span><span class="dom-tag d">D</span></td><td>组织树（CEO/CTO 角色层级）对研发协作偏重；无飞书生态与 11 种 CLI 自动检测的看板体验；早期粗糙（公开 issue 数千计）</td></tr>
+<tr><td><b>OpenAI Symphony</b><br><small>开源规范（SPEC.md）</small></td><td>Linear 状态机作控制面；任务 DAG 依赖；PR 生命周期护航（rebase / 解冲突 / 重试 flaky）；WORKFLOW.md 随仓库版本化</td><td><span class="dom-tag b">B</span><span class="dom-tag f">F</span></td><td>v1 仅绑定 Codex + Linear；无 Web UI 与多租户；其「无数据库」哲学与 Multica 的持久化任务模型相左</td></tr>
+<tr><td><b>Claude Managed Agents</b><br><small>Anthropic 云服务</small></td><td>会话预算硬顶与 budget_reached 暂停；auto 权限逐次评估；网络白名单与防外泄；OpenTelemetry 全链路追踪</td><td><span class="dom-tag a">A</span><span class="dom-tag d">D</span></td><td>闭源云服务，仅支持 Claude 生态；自托管自由度与厂商中立性正是 Multica 的立身之本</td></tr>
+<tr><td><b>「AI 军团」二次开发</b><br><small>一线团队实践（2026-07）</small></td><td>统一 agent 池四种派单策略；Workflow Template/Node/Edge 运行时；Submission + Verdict 结构化准出；定向返工带 rework 上下文；Sweeper 自愈；四层指标</td><td><span class="dom-tag b">B</span><span class="dom-tag e">E</span><span class="dom-tag x">横切</span></td><td>其外部交接与门户集成深度定制于自身需求；直接照抄会放大维护面，取其骨架概念即可</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 1-1 · 四个参考系的取舍。共同点：都不认为「换掉 agent」是答案，竞争发生在编排与治理层。</p>
+
+<h3>1.3 设计目标（可衡量）</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:9%">编号</th><th>目标</th><th style="width:34%">验收口径（概念级）</th></tr></thead>
+<tbody>
+<tr><td><code>G1</code></td><td>每一次运行都处于某级预算管辖之下</td><td>预算熔断覆盖率 100%；熔断后新任务入队被拒并通知，不产生静默扣费</td></tr>
+<tr><td><code>G2</code></td><td>工作流可表达并行与条件路由</td><td>单模板支持 ≥ 5 并行分支与 AND 收敛；下游节点只消费 Verdict 字段</td></tr>
+<tr><td><code>G3</code></td><td>上下文召回可发现未挂载知识</td><td>语义层召回 P95 延迟 ≤ 300ms；快照 token 占用受预算装箱约束</td></tr>
+<tr><td><code>G4</code></td><td>关键动作可审计、不可篡改</td><td>审计账本哈希链可校验；「谁批准 / 谁驳回 / 花费几何」单查询可得</td></tr>
+<tr><td><code>G5</code></td><td>外部交接不丢不重</td><td>入站事件幂等去重；出站失败重投递 + 死信；周期对账可发现漂移</td></tr>
+<tr><td><code>G6</code></td><td>PR 最后一公里自动化</td><td>flaky 自动重试；可解冲突自动 rebase；「自动恢复率」成为可统计指标</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 1-2 · 六条设计目标，与六大子域一一对应（G1↔A、G2↔B、G3↔C、G4↔D、G5↔E、G6↔F）。</p>
+
+<h3>1.4 非目标：明确不做什么</h3>
+<div class="nongoal">
+<div class="ng-t">以下事项刻意排除在 Multica-NG 范围外</div>
+<ul>
+<li>不做模型训练与自研 CLI——继续复用现有 11 种 agent CLI 生态与 daemon 本地执行模型，算力与密钥留在用户机器上。</li>
+<li>不替换现有 UI 范式——看板、issue 时间线、收件箱交互保持；新概念以「详情面板 / 设置页扩展」形式出现。</li>
+<li>不动 Workspace 隔离模型——所有新表继续以 workspace 为界、级联删除，不引入跨工作区共享存储。</li>
+<li>不追求替代飞书 / 钉钉 / GitHub 专用集成——外部交接是通用底座，专用集成保留并逐步上移。</li>
+<li>不实现「无人值守自动合并」——所有 Verdict=pass 的产物仍需人工验收，这是 Multica「nothing ships without a human」的底线。</li>
+</ul>
+</div>
+</section>
+
+
+<!-- ==================== 第 2 章 现状基线 ==================== -->
+<section class="chap" id="ch2">
+<h2><span class="cno">02</span>现状基线与保留不动清单</h2>
+<p class="lead">改进的前提是精确理解现状。本章以 Multica 公开概念模型为基线，梳理执行链路与既有机制，并划出「坚决不动」的安全区——好的架构改进，一半靠加，一半靠忍住不加。</p>
+
+<h3>2.1 概念模型速览</h3>
+<p>Multica 的世界由四组对象构成：<b>容器组</b>——工作区（Workspace，一切的范围）与项目（Project，相关任务的聚合，可绑定仓库等资源）；<b>执行组</b>——智能体（Agent，可复用的配置：指令 / 模型 / skill / Access / 运行时）、Skill（可复用能力包，跨智能体共享）、运行时（Runtime，执行发生的电脑）与运行（Run，一次具体执行记录）；<b>协作组</b>——任务（Issue，日常工作单位，负责人可以是成员、智能体或小队）、小队（Squad，leader 智能体带领的多智能体协同）、对话与收件箱；<b>自动化组</b>——自动化（Autopilot，按时间表或外部事件触发执行）。触发方式有四条：分配、@提及、对话、自动化（现有 Workflows 的列交接本质上也是一种分配触发）。</p>
+
+<h3>2.2 执行链路与运行生命周期</h3>
+<p>一次典型执行的完整链路：触发 → 构建上下文快照（工作区上下文 + 任务 + 关联任务 + 挂载技能）→ 入队 → daemon 通过待处理队列轮询获取 → 调用对应 agent CLI 加载技能执行 → 过程中持续写回评论与状态（WebSocket 实时推送）→ 结果沉淀为可复用技能。运行（Run）本身经历一套完整状态机：</p>
+<div class="lifecycle">
+<span class="lc-st">queued</span><span class="lc-sep">→</span><span class="lc-st">dispatched</span><span class="lc-sep">→</span><span class="lc-st">waiting_local_directory</span><span class="lc-sep">→</span><span class="lc-st hot">running</span><span class="lc-sep">→</span><span class="lc-st">completed</span><span class="lc-sep">/</span><span class="lc-st">failed</span><span class="lc-sep">/</span><span class="lc-st">cancelled</span>
+</div>
+<p class="cap">图 2-1 · 运行生命周期（简化）。每步状态转换都被跟踪并广播，无「无声失败」。</p>
+<p>可靠性地毯包括：daemon 心跳（默认 15 秒级）、断线重连宽限（小时级）、每机并发上限（agent 级与整机级双层）、临时错误的自动重试与网络错误的更高次数重试、以及自动化熔断（7 天内失败次数与失败率双阈值触发暂停）。这些机制在 P0 两个子域中全部复用，不改一行语义。</p>
+
+<h3>2.3 协作机制：小队与任务阶段</h3>
+<p>小队协议是 Multica 最精巧的现有设计：leader 智能体收到任务后向成员发出简报（Squad Operating Protocol + 名单 + 指令），以 <code class="inl">@成员</code> 方式派活；成员完成后<b>不带 @ 地回复</b>（静默汇报，避免互相唤醒）；只有显式 <code class="inl">@leader</code> 才把队长拉回。任务阶段机制则实现了「级联唤醒」：一个任务的各阶段（phase）依次完成，最早未完成阶段全部 done 时，系统自动唤醒父任务负责人。这两个机制天然就是「有向图运行时」的雏形——本设计的子域 B 不是替换它们，而是把这套隐式协议升级为显式声明式模板。</p>
+
+<h3>2.4 现有 Workflows 的能力边界</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:24%">现有能力</th><th>机制</th><th style="width:34%">边界（NG 要补的）</th></tr></thead>
+<tbody>
+<tr><td>状态列即流程</td><td>项目选模板（Delivery / Content / Community），看板列即状态</td><td>单 issue 单链，一列只能有一个交接目标</td></tr>
+<tr><td>列交接触发</td><td>进入某列 → 无交接 / 交给智能体 / 交给成员，可在时间线查看简报</td><td>无法按条件分流（网关缺失）</td></tr>
+<tr><td>两跳路由</td><td>「完成后移至」+「被拒绝退回」</td><td>仅线性前进与一步回退；无并行收敛、无跨节点定向返工</td></tr>
+<tr><td>上下文继承</td><td>描述、讨论、先前结果留在同一 issue 上</td><td>准出结论是自然语言评论，下游需再次阅读理解</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 2-1 · 现有 Workflows（单线状态机）四项能力与四条边界。子域 B 的定位：把「列」升级为「节点」，把「交接」升级为「边」。</p>
+
+<h3>2.5 保留不动清单（安全区）</h3>
+<div class="keep-box">
+<div class="kb-t">以下机制在 Multica-NG 中保持原样，任何子域不得破坏其语义</div>
+<ul>
+<li><b>Workspace 隔离与级联删除</b>——所有新增概念继续以工作区为界，删工作区即净身出户。</li>
+<li><b>Daemon + Runtime 本地执行模型</b>——算力、密钥、代码目录留在用户电脑；NG 的新检查点全部是「派发前置」而非「远程执行」。</li>
+<li><b>11 种 agent CLI 自动检测</b>——厂商中立是立身之本，新子域不得引入对特定 CLI 的硬依赖。</li>
+<li><b>Squad 协作协议</b>——leader / 静默汇报 / 让位规则原样保留，并可作为子域 B 中的「协作节点」整体入图。</li>
+<li><b>Issue 时间线与评论模型</b>——所有新事件的呈现都写回时间线，不另立消息中心。</li>
+<li><b>Autopilot 触发器</b>——保留为工作流的合法触发源之一（定时 / 外部事件 → 启动图实例）。</li>
+<li><b>飞书 / 钉钉 / GitHub 集成与长连接事件</b>——通知面不动；子域 E 只增加通用 Hook 底座。</li>
+<li><b>自托管部署面</b>——延续第 1 册验证的 <code class="inl">make selfhost</code> 与就绪检查路径，新子域全部默认关闭、按需开启。</li>
+</ul>
+</div>
+<div class="note info"><b>为什么「不动」是设计决策而非偷懒：</b>一线二次开发案例的教训清单里，「快照可能过时」「缺乏跨工作区记忆」等短板全部源自早期侵入式改动。叠加式演进让每一步都可以独立回滚（第 11 章），也让 upstream 升级冲突面最小（第 12 章风险 R5）。</div>
+</section>
+
+<!-- ==================== 第 3 章 总体目标架构 ==================== -->
+<section class="chap" id="ch3">
+<h2><span class="cno">03</span>总体目标架构：六层蓝图</h2>
+<p class="lead">目标架构只有一句话：<b>在 Multica 现有执行底座之上，叠加「治理 + 编排 + 记忆」三块企业拼图，用一条贯穿全层的事件总线缝合</b>。下面这张图是全书随后六章的总纲。</p>
+
+<div class="layer-stack">
+<div class="ls-title">Multica-NG 六层目标架构</div>
+<div class="ls-sub">自上而下：治理决定「允不允许」，编排决定「怎么走」，执行决定「谁来做」，记忆决定「知道什么」，集成决定「连到哪」</div>
+<div class="ly">
+<div class="ly-h"><b>治理层</b><i>允不允许 · 花多少</i><span class="st new">全新</span></div>
+<div class="ly-b">
+<span class="lb new">Budget 预算对象<small>四级层级</small></span>
+<span class="lb new">CostEvent 成本事件<small>统一计量</small></span>
+<span class="lb new">ApprovalGate 审批门禁<small>节点前置</small></span>
+<span class="lb new">ToolPolicy 工具策略<small>allow/deny/ask/auto</small></span>
+<span class="lb new">AuditLedger 审计账本<small>哈希链</small></span>
+</div>
+</div>
+<div class="ly">
+<div class="ly-h"><b>编排层</b><i>怎么走 · 走哪条路</i><span class="st ext">增强</span></div>
+<div class="ly-b">
+<span class="lb new">WorkflowTemplate<small>声明式 DAG</small></span>
+<span class="lb new">WorkflowInstance<small>运行实例</small></span>
+<span class="lb new">StepInstance<small>含 Verdict 裁定</small></span>
+<span class="lb keep">Squad 小队<small>协作节点入图</small></span>
+<span class="lb keep">Autopilot 自动化<small>图触发器</small></span>
+</div>
+</div>
+<div class="ly">
+<div class="ly-h"><b>执行层</b><i>谁来做 · 做得如何</i><span class="st keep">不变</span></div>
+<div class="ly-b">
+<span class="lb keep">Daemon 守护进程<small>心跳/重连/重试</small></span>
+<span class="lb keep">Runtime 运行时<small>本地电脑</small></span>
+<span class="lb keep">Agent CLI<small>11 种自动检测</small></span>
+<span class="lb keep">Run 状态机<small>八态生命周期</small></span>
+<span class="lb new">Guardian 守护智能体<small>CI 护航旁路</small></span>
+</div>
+</div>
+<div class="ly">
+<div class="ly-h"><b>记忆层</b><i>知道什么 · 带上什么</i><span class="st new">新增</span></div>
+<div class="ly-b">
+<span class="lb keep">Skill 技能库<small>显式层（保留）</small></span>
+<span class="lb new">MemoryIndex 语义层<small>混合检索</small></span>
+<span class="lb new">ContextAssembly 组装管线<small>召回→装箱</small></span>
+<span class="lb new">IncrementalEvent 增量事件<small>快照保鲜</small></span>
+</div>
+</div>
+<div class="ly">
+<div class="ly-h"><b>集成层</b><i>连到哪 · 怎么回来</i><span class="st ext">扩展</span></div>
+<div class="ly-b">
+<span class="lb keep">飞书 / 钉钉 Bot<small>通知面</small></span>
+<span class="lb keep">GitHub / VCS 集成<small>仓库与 PR</small></span>
+<span class="lb new">InboundHook 入站钩子<small>签名+幂等</small></span>
+<span class="lb new">OutboundHook 出站回写<small>重投递+死信</small></span>
+<span class="lb new">ExternalRef 外部映射<small>状态翻译表</small></span>
+</div>
+</div>
+<div class="ly-bus"><b>事件总线 + 可观测层（贯穿全层 · 新增）</b> —— CostEvent / StateTransition / Verdict / Approval / Handoff 全部作为统一事件流出账、进指标（四层看板）、驱动通知</div>
+<div class="ls-legend"><span><i class="l-new"></i>新增概念</span><span><i class="l-ext"></i>现有概念扩展</span><span><i class="l-keep"></i>保持不动</span></div>
+</div>
+<p class="cap">图 3-1 · Multica-NG 六层蓝图。执行层整层保持不动是刻意决策：算力与密钥留在用户机器，NG 的所有控制点都是「派发前检查」而非「执行中介」。</p>
+
+<h3>3.1 演进三原则</h3>
+<div class="dom-grid">
+<div class="dom-card"><div class="dc-head"><b>原则一 · 插件化</b></div><p>六大子域各自是可插拔模块：预算可以只开 A 不开 B，治理可以只开账本不开审批。全部关闭时系统行为与现状逐字节一致。「关掉等于没改过」是回归测试的黄金标准。</p></div>
+<div class="dom-card"><div class="dc-head"><b>原则二 · 开关化</b></div><p>每个子域一个特性开关（feature flag），支持按工作区灰度：先开一个试点工作区跑影子模式，对比无异常后再全量。开关状态本身入审计账本。</p></div>
+<div class="dom-card"><div class="dc-head"><b>原则三 · 不破坏</b></div><p>新概念一律以「引用」方式挂接旧对象，而非替代：StepInstance 引用 Issue 而非取而代之，Budget 挂在 Agent/Project 之上而非改造它们。旧数据永不迁移删除。</p></div>
+<div class="dom-card"><div class="dc-head"><b>贯穿原则 · 事件化</b></div><p>一切状态变化都是事件：成本是事件、裁定是事件、审批是事件、交接是事件。审计与指标是同一事件流的两种消费，不搞两套采集。</p></div>
+</div>
+
+<h3>3.2 旧概念到新概念映射</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:22%">现有概念</th><th style="width:14%">处置</th><th style="width:30%">NG 中的新位置</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>Workflows（列状态机）</td><td><span class="tag h">升级</span></td><td>WorkflowTemplate（有向图）</td><td>现有模板可一键导入为线性图；列交接语义保留为「节点边」</td></tr>
+<tr><td>usage / analytics 看板</td><td><span class="tag h">升级</span></td><td>CostEvent 事件流 + 预算看板</td><td>历史计量口径不变，新增「未来额度」视角</td></tr>
+<tr><td>activity_log 活动流</td><td><span class="tag b">扩展</span></td><td>AuditLedger 审计账本</td><td>活动流保留为展示层；账本为防篡改存储层</td></tr>
+<tr><td>Skill / 挂载关系</td><td><span class="tag q">保留</span></td><td>记忆层显式层（L1）</td><td>新增语义层（L2）做补充召回，不改挂载语义</td></tr>
+<tr><td>Squad 小队</td><td><span class="tag q">保留</span></td><td>图中的「协作节点」类型</td><td>小队整体作为一个节点入图，内部协议不变</td></tr>
+<tr><td>Autopilot 自动化</td><td><span class="tag q">保留</span></td><td>图触发器（定时 / 事件）</td><td>自动化触发可指向「启动某个图实例」</td></tr>
+<tr><td>收件箱 Inbox</td><td><span class="tag q">保留</span></td><td>审批 / 预警通知入口</td><td>ApprovalGate 的待办直接进收件箱</td></tr>
+<tr><td>Quick Actions 快捷指令</td><td><span class="tag q">保留</span></td><td>验收 / 驳回快捷按钮</td><td>人工验收节点的操作面板</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 3-1 · 概念映射：三升、一扩、四保留。全书没有一条「删除」。</p>
+
+<h3>3.3 新增概念总账</h3>
+<p>六大子域共引入 <b>21 个新概念</b>（治理层 6、编排层 5、记忆层 3、集成层 3、执行层旁路 1、横切 3），登记为 <b>43 条变更项</b>（编号 NG-A01 至 NG-X05），每条含类型（新增概念 / 扩展概念 / 新增接口 / 新增配置 / 迁移注意）、优先级与粗估工作量。研发拆卡时，建议以登记项为原始输入、以子域章节为验收口径。</p>
+<div class="note info"><b>一张图记住全书：</b>治理层管「钱与权」（第 4、7 章），编排层管「路与裁定」（第 5 章），记忆层管「上下文」（第 6 章），集成层管「进出」（第 8 章），CI 护航是执行层旁路（第 9 章），事件总线把它们全部缝合（第 10 章）。</div>
+</section>
+
+
+<!-- ==================== 第 4 章 子域 A：预算与成本治理 ==================== -->
+<section class="chap" id="ch4">
+<h2><span class="cno">A</span>子域 A · 预算与成本治理 <span class="prio p0">P0</span></h2>
+<p class="lead">目标 G1：每一次运行都处于某级预算管辖之下，超支在发生前被拦住。核心思路是把「花钱」从看板上的统计数字，变成派发链路上的三道闸门。</p>
+
+<h3>4.1 概念模型：四级预算 + 事件流</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:16%">概念</th><th>职责</th><th style="width:38%">关键属性（概念级）</th></tr></thead>
+<tbody>
+<tr><td><code>Budget</code></td><td>某一级对象的额度声明</td><td>归属层级（工作区 / 项目 / 智能体 / 单次运行）、周期（月 / 周 / 固定总额）、额度、预警线（默认 80%）、熔断线（默认 100%）、超限动作</td></tr>
+<tr><td><code>BudgetPolicy</code></td><td>额度规则的策略包</td><td>周期重置方式、是否允许超限排队、预警通知目标（收件箱 / 飞书）、恢复方式（自动新周期 / 人工提额）</td></tr>
+<tr><td><code>CostEvent</code></td><td>不可变成本事件（append-only）</td><td>归属（workspace/project/agent/run 四维）、计量（token 输入输出 / 折算费用）、来源（CLI 上报 / 估算）、发生时间</td></tr>
+<tr><td><code>QuotaSnapshot</code></td><td>额度余量的可读快照</td><td>当前周期已用 / 剩余、所处状态（正常 / 预警 / 熔断）、最近一次重置时间</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 4-1 · 子域 A 四个新概念。四级取<b>最严者生效</b>：工作区宽松而项目紧张时，按项目的紧额度拦截。</p>
+
+<h3>4.2 预算状态机</h3>
+<div class="smdiag">
+<div class="sm-title">Budget 生命周期状态机</div>
+<div class="sm-row">
+<div class="sm-state ok">正常<small>消耗 &lt; 预警线</small></div>
+<div class="sm-arr"><i>→</i><small>累计达 80%</small></div>
+<div class="sm-state warn">预警<small>可继续派发</small><small>通知已发出</small></div>
+<div class="sm-arr"><i>→</i><small>累计达 100%</small></div>
+<div class="sm-state bad">熔断<small>新任务入队被拒</small><small>在途运行允许完成</small></div>
+</div>
+<div class="sm-back"><i>恢复路径</i>：新周期自动重置（额度刷新 → 正常）　或　人工提额 / 调整策略 → ApprovalGate 审批通过 → 熔断解除 → 已排队任务按序恢复派发（审批全程入审计账本）</div>
+</div>
+<p class="cap">图 4-1 · 三态状态机。注意「熔断不杀在途」：已开始的运行允许自然完成并计费，避免半途而废的沉没成本——这与 CMA 的 budget_reached「暂停而非终止」语义一致。</p>
+
+<h3>4.3 三道闸门：入队 / 派发 / 核销</h3>
+<p>预算检查不在执行层加中介，而是嵌入现有派发链路的三个既有环节：</p>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:12%">闸门</th><th style="width:20%">时机</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td><b>入队闸</b></td><td>任务进入待处理队列时</td><td>按任务预估成本（无预估则按同类任务 P50 成本）与当前余量比对：不足则拒绝入队并通知负责人，附「预估 vs 剩余」明细</td></tr>
+<tr><td><b>派发闸</b></td><td>daemon 领取任务、启动 CLI 前</td><td>原子性预扣一笔预留额度（防止并发任务同时透支）；预扣在运行结束核销</td></tr>
+<tr><td><b>核销闸</b></td><td>运行完成、CostEvent 落账时</td><td>实际计量冲抵预扣，多退少补；触发状态机重算（可能跨入预警 / 熔断态）</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 4-2 · 三道闸门全部是「派发前 / 派发时 / 完成后」的记账动作，daemon 与 CLI 的执行语义零改动。</p>
+
+<h3>4.4 与现有 analytics 的关系</h3>
+<p>现有用量看板回答「过去花了多少」，Budget 回答「还允许花多少」；两者共享同一 CostEvent 事件流——看板是事件流的<b>回放视角</b>，预算是事件流的<b>前馈控制</b>。实现上不再另做采集：CLI 上报的用量数据落成 CostEvent 后，一边进看板聚合、一边累加进 QuotaSnapshot。历史 usage 数据建议回填为 CostEvent（第 11 章），使预算基线可以从真实历史学习出「同类任务 P50 成本」。</p>
+
+<h3>4.5 场景走查：LinkLite 例程中的预算护栏</h3>
+<details class="deep"><summary>走查：L7 鉴权限流任务触发熔断并恢复的全过程</summary>
+<div class="deep-body">
+<p>沿用第 2 册例程：某月项目「LinkLite」预算 200 美元，智能体 Backend 月度子预算 80 美元。L7（鉴权与限流）任务预估 6 美元。</p>
+<ol>
+<li>月初任务逐个完成，CostEvent 累计 Backend 已用 77.2 美元 → 触发 80% 预警（61.4 美元线已过），收件箱与飞书群收到预警通知，任务照常。</li>
+<li>L8（e2e 测试）入队时预估 4 美元：77.2 + 4 &lt; 80，放行并预扣 4 美元；运行完成后实际 3.1 美元，冲抵退回 0.9 美元。</li>
+<li>L9（部署文档）预估 3 美元：77.2 + 3.1 + 3 &lt; 80，放行。但该任务实际跑了 2.4 美元后进入一个修复循环，核销时累计达 82.7 美元 → <b>熔断</b>。</li>
+<li>此后队长试图派发新子任务，入队闸拒绝并附明细（预估 5 美元 vs 剩余 -2.7 美元）；helper 管家智能体收到事件，在 issue 时间线留下熔断说明。</li>
+<li>负责人判断循环属正常返工，将 Backend 子预算提至 100 美元 → ApprovalGate 向工作区 admin 发审批（收件箱直达，一键批准）→ 审批入审计账本 → 熔断解除，排队任务恢复派发。</li>
+</ol>
+<p><b>验收口径（对应 G1）：</b>全程没有任何一笔「无预算管辖」的运行；熔断到恢复的每个动作（拒绝、通知、提额、批准）在审计账本中单查询可得。</p>
+</div></details>
+
+<h3>4.6 设计边界与已知取舍</h3>
+<ul>
+<li><b>计量误差：</b>本地执行的 token 用量依赖 CLI 上报，允许 5% 容差缓冲（预警线默认 80% 而非 95% 即为此留白）；预留-核销机制吸收并发透支。</li>
+<li><b>故障降级：</b>预算服务不可用时<b>fail-closed</b>（暂停派发而非放行）——宁可停也不失控；该决策入第 10 章演练清单。</li>
+<li><b>不做的事：</b>不做跨工作区合并预算、不做实时汇率折算（费用按配置的固定单价表折算）、不做按模型退避降价建议——那是运营工具，不是架构。</li>
+</ul>
+</section>
+
+<!-- ==================== 第 5 章 子域 B：工作流运行时 ==================== -->
+<section class="chap" id="ch5">
+<h2><span class="cno">B</span>子域 B · 工作流运行时 <span class="prio p0">P0</span></h2>
+<p class="lead">目标 G2：把「单线状态机 + 列交接」升级为<b>声明式有向图运行时</b>。三个关键词：并行（fan-out / 收敛）、结构化准出（Submission + Verdict）、定向返工（rework-context）。现有 Workflows 不废弃，一键导入为线性模板。</p>
+
+<h3>5.1 对象模型：模板 → 实例 → 步骤</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:20%">概念</th><th>职责</th><th style="width:36%">关键属性（概念级）</th></tr></thead>
+<tbody>
+<tr><td><code>WorkflowTemplate</code></td><td>声明式有向图（版本化）</td><td>节点集 + 边集（含条件表达式）、全局上下文、导入来源（新建 / 从现有 Workflow 导入）</td></tr>
+<tr><td><code>WorkflowNode</code></td><td>图节点（六种类型）</td><td>类型（agent / human / squad协作 / gateway网关 / fanout+join并行 / timer定时 / subworkflow子图）、准出条件、超时与 blocked 策略</td></tr>
+<tr><td><code>WorkflowEdge</code></td><td>有向边</td><td>源 / 目标节点、条件表达式（消费上游 Verdict 与业务字段）、默认边标记</td></tr>
+<tr><td><code>WorkflowInstance</code></td><td>一次图的运行</td><td>模板版本引用、触发源（人工 / Autopilot / InboundHook）、外部引用、整体状态</td></tr>
+<tr><td><code>StepInstance</code></td><td>节点的一次执行</td><td>关联 Issue 与 Run、Submission（提交物）、Verdict（裁定）、重试次数、rework 上下文</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 5-1 · 子域 B 五个新概念。StepInstance 始终<b>引用</b> Issue——看板、评论、@提及等现有交互原样可用。</p>
+
+<h3>5.2 结构化准出契约：Submission + Verdict</h3>
+<p>这是整个子域 B 乃至全书的枢纽设计。agent 节点完成时不再只留一段自然语言评论，而是提交一份结构化 Submission，系统据此派生统一的 Verdict：</p>
+<div class="codeblk"><span class="cmt">// Submission —— 节点完成时提交</span>
+{
+  <span class="k">"deliverables"</span>: [ { <span class="k">"kind"</span>: "pr", <span class="k">"ref"</span>: "链接" },
+                      { <span class="k">"kind"</span>: "analysis", <span class="k">"ref"</span>: "评论锚点" } ],
+  <span class="k">"verdict"</span>:   "pass" | "fail" | "blocked" | "rework",   <span class="cmt">// 流程裁定</span>
+  <span class="k">"reason"</span>:    "根因解释（一段人可读的话）",
+  <span class="k">"confidence"</span>: 0.0 - 1.0,
+  <span class="k">"metrics"</span>:   { <span class="k">"tests_added"</span>: 12, <span class="k">"files_touched"</span>: 5 }
+}
+<span class="cmt">// Verdict 由系统按节点准出条件校验后落账；</span>
+<span class="cmt">// 下游只消费 Verdict 与 deliverables 引用，不解析自然语言。</span>
+<span class="cmt">// 人工节点的验收动作同样落成 Verdict。</span></div>
+<p class="cap">图 5-1 · 准出契约。借鉴「AI 军团」案例的准出字段设计：业务产物 / 流程裁定 / 根因 / 置信度四件套，无论这一步交给哪个 agent，下游消费方式不变。</p>
+
+<h3>5.3 示例：LinkLite 发布工作流（DAG 全景）</h3>
+<div class="dag">
+<div class="dag-title">LinkLite 例程 · 发布工作流模板（示例 DAG）</div>
+<div class="dag-sub">对应第 2 册 LL-0 的三阶段拆解：并行开发 → 交叉审查 → 人工验收；虚线为定向返工路径</div>
+<div class="dag-node start">需求评审节点<small>human · 产品负责人确认 LL-0 验收标准</small></div>
+<div class="dag-v">↓<small>verdict=pass</small></div>
+<div class="dag-node gw">◇ fanout · 并行拆解</div>
+<div class="dag-fan">
+<div class="dag-node">后端实现<small>agent: Backend<br>L3 建链 / L4 跳转埋点</small></div>
+<div class="dag-node">前端实现<small>agent: Frontend<br>L6 管理页</small></div>
+<div class="dag-node">测试用例<small>agent: Reviewer(Gemini)<br>L8 e2e 用例先行</small></div>
+</div>
+<div class="dag-v">↓<small>AND 收敛 · 全部 pass 才推进</small></div>
+<div class="dag-node">交叉审查节点<small>agent: Reviewer · 消费三份 Submission 的 deliverables</small></div>
+<div class="dag-v">↓<small>verdict=pass</small></div>
+<div class="dag-node human">人工验收节点<small>human · Quick Action 一键 验收 / 驳回</small></div>
+<div class="dag-v">↓<small>verdict=pass</small></div>
+<div class="dag-node end">交付节点<small>通知负责人 · 状态回写 · 技能沉淀候选</small></div>
+<div class="dag-loop"><b>rework 定向返工</b>：人工验收驳回 → 只回到「后端实现」等指定节点（非全链重跑）；新一轮 StepInstance 自动携带 rework-context（驳回原因 + 受影响范围 + 上轮 metrics），通过 <code class="inl">@节点</code> 派回原 agent。审查节点 fail → 回对应实现节点；整体 blocked → 暂停并通知。</div>
+</div>
+<p class="cap">图 5-2 · 有向图全景。对比现状：同样的工作在现有 Workflows 里需要三个 issue 串行走完，且无法并行、无结构化裁定。</p>
+
+<h3>5.4 并行与失败策略</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:16%">场景</th><th>策略</th><th style="width:34%">语义</th></tr></thead>
+<tbody>
+<tr><td>fan-out 分支</td><td>并行 StepInstance</td><td>每个分支独立生成 Issue 与 Run，预算各自过闸；天然复用现有并发上限（agent 级 / 整机级）</td></tr>
+<tr><td>AND 收敛</td><td>全部完成才推进</td><td>任一分支未完成则汇聚节点等待；等待中 blocked 上报沿用现有机制</td></tr>
+<tr><td>兄弟分支 fail</td><td>按模板三选一</td><td>fail-fast（终止兄弟）/ continue（容忍，收敛时按裁定合并）/ rework（仅失败分支重跑）</td></tr>
+<tr><td>节点超时</td><td>模板可配</td><td>标记 blocked + 通知（默认），或自动重试（复用现有临时错误重试语义）</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 5-2 · 并行与失败策略。Sweeper 式自愈（长时间 running 重置、孤立任务重分发）沿用现有 daemon 行为，不重复建设。</p>
+
+<h3>5.5 与现有机制的接缝</h3>
+<ul>
+<li><b>Issue 不变：</b>每个 agent / human / squad 节点激活时创建或复用 Issue——看板、评论、@提及、收件箱全部原样工作。</li>
+<li><b>Squad 作为协作节点：</b>小队整体入图时，内部 leader 协议、静默汇报、让位规则不变；小队对外的完成汇报落成一份 Submission。</li>
+<li><b>Autopilot 作为触发器：</b>定时 / 外部事件触发「启动图实例」，替代原本只能触发单次执行的限制。</li>
+<li><b>现有 Workflow 导入：</b>线性列模板一键转为「节点-边」线性图（列 = 节点，交接 = 边，「完成后移至 / 退回」= 默认边 / 返工边），导入后可增量添加并行与网关。</li>
+<li><b>阶段机制兼容：</b>现有任务阶段唤醒继续工作；图中节点完成即阶段 done，父级唤醒逻辑复用。</li>
+</ul>
+
+<h3>5.6 设计边界</h3>
+<ul>
+<li><b>不做通用工作流引擎：</b>不做循环边、不做动态图（运行中改拓扑）；需要循环的场景用 subworkflow + 显式重试表达。Symphony 的教训：把 agent 当刚性状态机节点会浪费其推理能力，因此节点给的是「目标 + 准出条件」，不是脚本步骤。</li>
+<li><b>不做跨工作区模板共享：</b>模板以工作区为单位；受控导出 / 导入留作运营功能。</li>
+<li><b>Verdict 不裁决业务对错：</b>裁定只回答「这一步是否达到其声明的准出条件」；业务对错永远由人工验收节点（或集成层的外部验收）说了算。</li>
+</ul>
+</section>
+
+
+<!-- ==================== 第 6 章 子域 C：记忆与上下文层 ==================== -->
+<section class="chap" id="ch6">
+<h2><span class="cno">C</span>子域 C · 记忆与上下文层 <span class="prio p1">P1</span></h2>
+<p class="lead">目标 G3：让智能体「带得上该带的、找得到没挂的、用得起新鲜的」。设计立场：显式技能库（人工策展）是 Multica 的优点，保留为 L1；新增 L2 语义检索层做补充，而非替代——检索错误的代价，在代码类任务里高于筛选成本。</p>
+
+<h3>6.1 双层记忆模型</h3>
+<div class="memstack">
+<div class="mem-title">双层记忆与上下文组装管线</div>
+<div class="mem-layers">
+<div class="mem-l">
+<h5>L1 · 显式层（现有，保留）</h5>
+<p>Skill 库 + 挂载关系。人工策展、精确可靠：数据库迁移这类需要「精确操作手册」的任务，显式挂载仍是最优解。挂载语义、评审与复用机制一概不动。</p>
+</div>
+<div class="mem-join"><i>⇄</i><small>组装时<br>合并<br>去重</small></div>
+<div class="mem-l l2">
+<h5>L2 · 语义层（新增）</h5>
+<p>MemoryIndex：对历史 issue 决策、运行摘要、未挂载技能做向量 + 关键词混合索引，按 workspace 分片。召回是「补充」——只补 L1 覆盖不到的空白，永远不覆盖显式挂载。</p>
+</div>
+</div>
+<div class="pipe">
+<span class="pv">召回<small>L1 显式 + L2 topK</small></span><span class="pa">→</span>
+<span class="pv">过滤<small>密钥脱敏 · 权限边界</small></span><span class="pa">→</span>
+<span class="pv">排序<small>相关度 × 新鲜度</small></span><span class="pa">→</span>
+<span class="pv">装箱<small>token 预算内截断</small></span><span class="pa">→</span>
+<span class="pv out">上下文快照<small>进入现有入队链路</small></span>
+</div>
+</div>
+<p class="cap">图 6-1 · 双层记忆 + 组装管线。管线终点仍是现有的「快照入队」机制——记忆层换的是快照的<b>内容来源</b>，不是投递方式。</p>
+
+<h3>6.2 快照保鲜：增量事件通道</h3>
+<p>针对「快照一次性、执行中新评论进不来」的批评，设计一条轻量增量通道：运行期间，任务上的<b>新评论、blocked 标记、验收驳回</b>以 IncrementalEvent 追加到该 Run 的待注入队列；daemon 心跳节拍上顺带投递（复用现有心跳，不新增连接）。智能体侧表现为会话中出现一条带时间戳的系统注入消息——不重建快照、不打断执行。对长任务（小时级）这是「保鲜」与「稳态」的折中：重大上下文变化（如任务被改派）仍走取消重启，不强行热更。</p>
+
+<h3>6.3 技能生命周期治理</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:15%">阶段</th><th>机制</th><th style="width:40%">要点</th></tr></thead>
+<tbody>
+<tr><td>候选生成</td><td>运行完成后的沉淀候选</td><td>Verdict=pass 且含可复用模式的 Submission 自动进入候选队列（现有技能沉淀的增强入口）</td></tr>
+<tr><td>评审晋升</td><td>人工确认后才成为 L1 技能</td><td>评审动作走收件箱；拒绝的候选仍留在 L2 可被语义召回——「不晋升但可发现」</td></tr>
+<tr><td>衰减淘汰</td><td>引用计数 + 成功率衰减</td><td>长期零引用或成功率滑坡的技能标记待退役，人工确认后归档（不物理删除，审计可溯）</td></tr>
+<tr><td>去重合并</td><td>相似度提示</td><td>L2 检测到高度相似技能时向维护人发合并建议，防技能库腐化</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 6-1 · 技能治理闭环。对应社区指出的「技能质量依赖团队习惯，不及时沉淀就退化」——把习惯变成流程。</p>
+
+<h3>6.4 快照体积控制</h3>
+<p>技能库增长带来的快照膨胀（200 个技能即很大的上下文块）由管线「装箱」环节统一解决：L1 挂载项与 L2 召回项在同一个 token 预算内竞逐，超预算时按（相关度 × 新鲜度 × 是否显式挂载）排序截断，被截断项以「可按需引用的索引行」形式保留占位（智能体可通过工具调用按需拉取全文）。由此，快照体积从「随库增长」变为「恒定预算 + 按需展开」。</p>
+
+<h3>6.5 设计边界</h3>
+<ul>
+<li><b>不做跨工作区记忆：</b>L2 索引严格按 workspace 分片；「技能市场」式受控导出 / 导入属运营功能，不在架构范围。</li>
+<li><b>检索不覆盖挂载：</b>L2 召回永不挤占 L1 显式挂载项的预算份额——显式优先是硬规则。</li>
+<li><b>隐私红线：</b>过滤环节对密钥、凭据模式做硬脱敏；L2 索引内容与权限模型联动（无权限对象不进召回候选）。</li>
+<li><b>可降级：</b>语义层故障时管线自动退化为「仅 L1」模式——记忆层失效不应导致任务无法派发。</li>
+</ul>
+</section>
+
+<!-- ==================== 第 7 章 子域 D：治理审计与审批 ==================== -->
+<section class="chap" id="ch7">
+<h2><span class="cno">D</span>子域 D · 治理、审计与审批 <span class="prio p1">P1</span></h2>
+<p class="lead">目标 G4：关键动作可审计、不可篡改、可追溯；敏感动作发生前有门禁。三个组件：审计账本（事后可查）、审批门禁（事前拦截）、工具策略（事中评估），全部挂在第 3 章的治理层。</p>
+
+<h3>7.1 审计账本 AuditLedger</h3>
+<p>现有活动流是「给人看的展示层」；AuditLedger 是「给制度看的存储层」——append-only 事件账本，每条记录含：动作主体（人 / 智能体 / 系统）、动作客体、前后状态摘要、trace_id（贯穿一次图实例的追踪键）、以及<b>前一条记录的哈希</b>，形成哈希链：任何历史篡改都会破坏链校验。必录动作清单：预算变更与熔断 / 恢复、审批的发起与裁定、Verdict 落账、返工裁决、外部交接收发、工具策略的 auto 裁决、特性开关切换。查询场景即验收口径：「谁批准了这次超预算」「这个返工是谁驳回的」「这周哪些 auto 裁决拒绝了什么工具调用」都应是单查询可得。</p>
+
+<h3>7.2 审批门禁 ApprovalGate</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:20%">挂接点</th><th>触发条件（可配）</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td>节点前置</td><td>模板声明某节点需审批</td><td>图实例推进到该节点时暂停，待办进审批人收件箱（可直达飞书卡片）；批准 / 驳回本身落 Verdict 与审计</td></tr>
+<tr><td>预算联动</td><td>熔断后提额请求</td><td>第 4 章场景：admin 一键批准后熔断解除</td></tr>
+<tr><td>策略命中</td><td>工具策略返回 ask</td><td>运行暂停等待人工放行 / 拒绝（复用 daemon 暂停语义）</td></tr>
+<tr><td>紧急通道</td><td>break-glass</td><td>允许先执行后补审批，但醒目标记 + 事后强制复盘条目入账本——不阻塞救火，但留下脚印</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 7-1 · 四种挂接点。审批不做多层组织树（那是 Paperclip 的路线）；一层门禁 + 紧急通道对研发协作足够。</p>
+
+<h3>7.3 工具级策略 ToolPolicy</h3>
+<p>在现有成员角色（owner / admin / member）之上，为每个智能体增加工具策略声明——借鉴 CMA 的 auto 权限评估：每条策略是「工具模式 → 动作」的映射，动作四选一：</p>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:12%">动作</th><th>语义</th><th style="width:42%">示例</th></tr></thead>
+<tbody>
+<tr><td><code>allow</code></td><td>直接放行</td><td>只读类：读文件、列目录、查 CI 日志</td></tr>
+<tr><td><code>deny</code></td><td>直接拒绝</td><td>危险类：删除工作区、修改成员角色</td></tr>
+<tr><td><code>ask</code></td><td>暂停等人批</td><td>敏感类：推送 main、消费外部 API、创建新 agent</td></tr>
+<tr><td><code>auto</code></td><td>平台按风险规则评估</td><td>中间地带：低风险放行并记账，高风险转 ask——规则可解释、裁决可审计</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 7-2 · 四动作策略。策略评估点在 daemon 侧、CLI 调用前拦截——依然是「派发前检查」，不动执行模型。</p>
+
+<h3>7.4 一次贯穿三组件的联动（对应 G4 验收）</h3>
+<details class="deep"><summary>走查：一次「工具调用 → auto 评估 → 转人工 → 审批 → 账本」的全链路</summary>
+<div class="deep-body">
+<p>Backend 智能体执行 L9 部署文档节点时，尝试执行 <code class="inl">git push origin main</code>。其 ToolPolicy 中「写远端默认分支」配置为 auto。daemon 侧策略点评估：该 Run 无对应审批先例、且分支保护规则命中高风险特征 → 裁决转 <b>ask</b>。运行暂停，待办进负责人收件箱（附上下文：哪个节点、哪条命令、为什么转人工）。负责人批准 → 执行继续；该次 auto→ask 裁决、审批动作、执行结果全部以同一 trace_id 落审计账本。事后审计查询「本周所有被转人工的 push」一次可得，并可回放每次的根因。</p>
+</div></details>
+
+<h3>7.5 设计边界</h3>
+<ul>
+<li><b>账本不存密文大对象：</b>只存动作与状态摘要，附件引用原始对象——账本膨胀会拖垮哈希链校验性能。</li>
+<li><b>审批超时策略：</b>默认「一直等」（保守），模板可配超时自动驳回——自动<b>通过</b>永远不是可配项，这是安全底线。</li>
+<li><b>不做多层组织树审批流：</b>单人门禁 + break-glass；若组织需要多级审批，那是子域 E 从外部系统接入的流程，不在平台内复制。</li>
+</ul>
+</section>
+
+
+<!-- ==================== 第 8 章 子域 E：外部系统交接 ==================== -->
+<section class="chap" id="ch8">
+<h2><span class="cno">E</span>子域 E · 外部系统交接 <span class="prio p2">P2</span></h2>
+<p class="lead">目标 G5：真实工作不必搬进平台——外部系统（需求 / 缺陷 / 验收 / 发布）在合适的状态把工作推给 Multica，Multica 组织智能体执行，再把结果与状态交回去。三条铁律：幂等、重放、对账。</p>
+
+<h3>8.1 双向通道与对象映射</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:17%">概念</th><th>方向</th><th>职责</th></tr></thead>
+<tbody>
+<tr><td><code>InboundHook</code></td><td>外部 → 平台</td><td>接收外部事件（需求可执行、缺陷提交、定时巡检）：验签 → 幂等去重 → 按 <code class="inl">template_key</code> 路由到 WorkflowTemplate → 创建图实例（挂外部引用）</td></tr>
+<tr><td><code>OutboundHook</code></td><td>平台 → 外部</td><td>完成通知（收件箱 + 飞书之外，向外部系统推送）、状态回写、验收结果回流（外部批准 → 图收敛关闭；驳回 → 触发定向返工）</td></tr>
+<tr><td><code>ExternalRef</code></td><td>双向锚点</td><td>外部对象映射：来源系统 / 类型 / 外部 ID / 深链，以及<b>状态翻译表</b>（平台状态 ↔ 外部状态）</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 8-1 · 三个新概念。单向真源原则：平台管执行状态，外部系统管业务状态，翻译表负责两者对齐——两边都不越界代管对方的状态。</p>
+
+<h3>8.2 三机制：幂等、重放、对账</h3>
+<ul>
+<li><b>幂等：</b>入站事件以「外部 ID + 事件序号」为幂等键，重复投递不产生第二个图实例；出站回写携带唯一事件 ID，外部系统可安全去重。</li>
+<li><b>重放：</b>出站失败按退避重投递，超过阈值进死信队列并告警；死信支持人工修复后重放——交接不丢。</li>
+<li><b>对账：</b>低频周期任务（Autopilot 驱动）拉取外部状态与平台状态比对，漂移项生成对账报告 + 单向修正建议——机器只建议，人确认修正。</li>
+</ul>
+
+<h3>8.3 与现有集成的关系</h3>
+<p>飞书 / 钉钉 / GitHub 集成原样保留。子域 E 是通用底座：专用集成未来可逐个上移为「InboundHook 的适配器」（例如 GitHub issue 事件 → template_key=bugfix 的图实例），但这是演进选项而非要求——底座与专用集成长期共存，谁好用用谁。</p>
+
+<h3>8.4 设计边界</h3>
+<ul>
+<li><b>不代管外部状态：</b>平台永不直接修改外部系统的业务字段，只回写「执行侧事实」（完成 / 失败 / 待验收 + 证据链接）。</li>
+<li><b>验签是硬门槛：</b>入站无签名验证直接丢弃并计数告警——开放端点必须默认敌意。</li>
+<li><b>对账不自动修正：</b>漂移修正永远人工确认（与「不无人合并」同一底线）。</li>
+</ul>
+</section>
+
+<!-- ==================== 第 9 章 子域 F：CI 护航 ==================== -->
+<section class="chap" id="ch9">
+<h2><span class="cno">F</span>子域 F · CI 护航 <span class="prio p2">P2</span></h2>
+<p class="lead">目标 G6：Symphony 的观察值得原样引用——大仓库里 PR 的最后一公里又慢又脆，系统应当「看着 CI、按需 rebase、解冲突、重试 flaky、护送变更进主分支」。本子域把这件事变成 Multica 的一个执行层旁路：专职守护智能体（Guardian）+ Verdict 质量门。</p>
+
+<h3>9.1 守护状态机</h3>
+<div class="smdiag">
+<div class="sm-title">PR 生命周期守护状态机（Guardian 视角）</div>
+<div class="sm-row">
+<div class="sm-state info">PR 开启<small>提交产物就位</small></div>
+<div class="sm-arr"><i>→</i><small>订阅检查</small></div>
+<div class="sm-state info">检查运行中<small>watch CI</small></div>
+<div class="sm-arr"><i>→</i><small>全绿</small></div>
+<div class="sm-state ok">待合并<small>人工确认后合并</small></div>
+</div>
+<div class="sm-row" style="margin-top:8px">
+<div class="sm-state warn">flaky 疑似<small>单测间歇失败特征</small></div>
+<div class="sm-arr"><i>→</i><small>重试 N 次</small></div>
+<div class="sm-state ok">恢复绿<small>记录 flaky 标签</small></div>
+<div class="sm-arr"><i>→</i><small>重试仍红</small></div>
+<div class="sm-state bad">转真失败<small>派回原节点</small></div>
+</div>
+<div class="sm-row" style="margin-top:8px">
+<div class="sm-state warn">冲突检测<small>主分支前进</small></div>
+<div class="sm-arr"><i>→</i><small>评估复杂度</small></div>
+<div class="sm-state ok">自动 rebase<small>低复杂度冲突自动解</small></div>
+<div class="sm-arr"><i>→</i><small>高复杂度</small></div>
+<div class="sm-state bad">派回原节点<small>带冲突上下文</small></div>
+</div>
+</div>
+<p class="cap">图 9-1 · 三条守护路径：flaky 重试、冲突自动解、真失败定向派回。派回 = 子域 B 的 rework 边（携带 CI 日志摘要与失败上下文），原 agent 收到的不是「重新做一遍」而是「这里红了，修这里」。</p>
+
+<h3>9.2 Guardian 智能体与护栏</h3>
+<p>Guardian 不需要新执行机制：它是普通智能体配置 + 一组专用 skill（读 CI 日志、评估冲突复杂度、执行 rebase），由图模板中的「交付前置节点」自动唤起。护栏三件套：<b>限速</b>（每 PR 每小时干预次数上限，防守护自身打转）；<b>权限最小化</b>（ToolPolicy 默认 deny push main，仅允许维护 PR 分支）；<b>全程入账</b>（每次重试 / rebase / 派回都以事件入审计账本）。合并动作永远留给人工——守护止步于「待合并」。</p>
+
+<h3>9.3 与 Verdict 质量门的联动</h3>
+<p>交付节点的准出条件升级为复合门：<code class="inl">Verdict == pass</code>（业务裁定）<b>且</b> CI 守护状态 == 待合并（工程裁定）<b>且</b>（可选）外部验收 == approved（集成层裁定）。三门全绿才进入人工合并确认——「到合并时已高度确信能进主分支」正是 Symphony 报告的效果，NG 不需要新机制即可继承。</p>
+
+<h3>9.4 设计边界</h3>
+<ul>
+<li><b>只守护，不合并：</b>自动合并明确排除（第 1 章非目标重申）。</li>
+<li><b>不绑定特定 CI：</b>检查状态抽象为「外部检查源」，GitHub Checks / 内部流水线通过集成层适配。</li>
+<li><b>flaky 判定保守：</b>仅对「同 commit 重跑变绿」标记 flaky；其余一律按真失败派回——宁可多派回，不可漏放行。</li>
+</ul>
+</section>
+
+<!-- ==================== 第 10 章 非功能设计 ==================== -->
+<section class="chap" id="ch10">
+<h2><span class="cno">10</span>非功能设计</h2>
+<p class="lead">概念蓝图也不能漏掉四件非功能大事：看得见（可观测）、扛得住（容量）、隔得开（隔离）、坏得明白（故障降级）。</p>
+
+<h3>10.1 可观测：四层指标</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:13%">层级</th><th style="width:38%">关注问题</th><th>示例指标</th></tr></thead>
+<tbody>
+<tr><td><b>智能体层</b></td><td>哪些智能体稳定</td><td>调用次数、成功率、blocked 率、超时率、单位成本</td></tr>
+<tr><td><b>工作流层</b></td><td>哪条链路有效</td><td>完成率、一次通过率、平均耗时、返工率、并行度利用率</td></tr>
+<tr><td><b>节点层</b></td><td>哪一步最容易卡</td><td>blocked 节点分布、失败原因分布、验收驳回原因、审批等待时长</td></tr>
+<tr><td><b>场景层</b></td><td>哪类工作适合进入</td><td>场景通过率、人工介入率、外部验收采纳率</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 10-1 · 四层指标（承接「AI 军团」案例的指标分层）。全部由统一事件流聚合而来，不另建采集——指标是事件的第二种消费（第一种是审计）。</p>
+
+<h3>10.2 容量估算（数量级口径）</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th>对象</th><th style="width:28%">假设规模</th><th style="width:34%">日增量（数量级）</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>运行 / CostEvent</td><td>10 工作区 · 50 智能体</td><td>10^3 – 10^4 条事件</td><td>事件流为主写入压力；账本追加写 + 周期校验</td></tr>
+<tr><td>图实例 / 步骤</td><td>日均 100 图 · 每图 5–9 节点</td><td>10^2 图 · 10^3 步骤</td><td>StepInstance 状态更新频繁但量小</td></tr>
+<tr><td>L2 语义索引</td><td>5 万条可索引单元</td><td>增量 10^2 – 10^3</td><td>混合检索 P95 ≤ 300ms（G3 口径）</td></tr>
+<tr><td>审计账本</td><td>全部事件的可录子集</td><td>10^4 条</td><td>哈希链校验为离线周期任务，不占在线路径</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 10-2 · 数量级估算。结论：单实例关系型存储仍绰绰有余——NG 不引入新的存储基础设施，延续现有栈。</p>
+
+<h3>10.3 隔离与安全</h3>
+<ul>
+<li><b>工作区硬边界：</b>所有新表带 workspace 归属 + 级联删除（沿用现有模式）；L2 索引按工作区分片，检索永不跨片。</li>
+<li><b>密钥红线：</b>上下文组装管线过滤环节做密钥脱敏；CostEvent 只记计量不记内容。</li>
+<li><b>入站敌意假设：</b>InboundHook 验签失败即丢弃 + 计数告警（见 8.4）。</li>
+</ul>
+
+<h3>10.4 故障降级矩阵</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th>组件故障</th><th style="width:22%">降级行为</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>预算服务不可用</td><td><b>fail-closed</b>：暂停派发</td><td>宁可停也不失控烧钱</td></tr>
+<tr><td>审批服务不可用</td><td><b>fail-open</b>：按未配置门禁放行，恢复后补录</td><td>审批是增强项，不应因它停摆主链路（补录入账本）</td></tr>
+<tr><td>语义层不可用</td><td>退化为仅 L1 显式记忆</td><td>召回是补充，不是依赖</td></tr>
+<tr><td>CI 护航不可用</td><td>交付节点退化为无质量门</td><td>人工验收仍在，底线未破</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 10-3 · 降级矩阵。原则：钱的事保守（closed），增强的事乐观（open + 补录）。全部场景入第 12 章演练门禁。</p>
+</section>
+
+
+<!-- ==================== 第 11 章 迁移与兼容 ==================== -->
+<section class="chap" id="ch11">
+<h2><span class="cno">11</span>迁移与兼容策略</h2>
+<p class="lead">三原则（插件化 / 开关化 / 不破坏）落到操作层面，就是每个子域都走同一条四步渐进路径，且顺序遵循依赖关系——预算先行，因为它谁也不依赖，却人人都依赖它。</p>
+
+<h3>11.1 四步渐进路径（每个子域同构）</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:14%">步骤</th><th style="width:24%">状态</th><th>内容与退出条件</th></tr></thead>
+<tbody>
+<tr><td><b>① 特性开关</b></td><td>默认关闭</td><td>新概念落库、接口就绪，用户不可见；「关掉等于没改过」回归通过</td></tr>
+<tr><td><b>② 影子模式</b></td><td>旁路运行</td><td>新逻辑计算但不生效，只记录「如果生效会怎样」（如预算影子账本、Verdict 影子裁定）；对比期无异常告警</td></tr>
+<tr><td><b>③ 双写对账</b></td><td>新旧并行</td><td>事件同时落旧展示路径与新账本，周期对账差异为零（如活动流 vs 审计账本）</td></tr>
+<tr><td><b>④ 切主</b></td><td>按工作区灰度</td><td>试点工作区全量 → 观察 → 全局默认开；每一步都可独立回退到 ①</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 11-1 · 四步路径。回滚即关开关——schema 只加不删（新增表、可空字段），保证回退无残留。</p>
+
+<h3>11.2 六子域实施顺序与依赖</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:9%">序</th><th style="width:24%">子域</th><th style="width:30%">前置依赖</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><span class="dom-tag a">A</span>预算与成本治理</td><td>无</td><td>事件流与派发闸门是后续所有子域的公共地基；且独立可用、见效最快</td></tr>
+<tr><td>2</td><td><span class="dom-tag b">B</span>工作流运行时</td><td>A（可选，用于节点成本归集）</td><td>P0 双子域互不硬依赖，但 B 的节点计量天然复用 A 的 CostEvent</td></tr>
+<tr><td>3</td><td><span class="dom-tag c">C</span>记忆与上下文层</td><td>无（可与 A/B 并行）</td><td>管线独立；建议放在 B 后仅因图实例上下文更丰富、召回评测更有意义</td></tr>
+<tr><td>4</td><td><span class="dom-tag d">D</span>治理审计与审批</td><td>A、B 的事件源</td><td>账本录的就是 A/B 产生的事件；审批挂接点依赖 B 的节点概念</td></tr>
+<tr><td>5</td><td><span class="dom-tag e">E</span>外部系统交接</td><td>B 的模板路由</td><td>入站事件最终路由到 WorkflowTemplate；无 B 则只能触发单次执行</td></tr>
+<tr><td>6</td><td><span class="dom-tag f">F</span>CI 护航</td><td>B 的 Verdict 与 rework 边</td><td>守护状态机的「派回原节点」即 B 的定向返工；质量门消费 Verdict</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 11-2 · 依赖排序。C 是唯一的并行自由度——P1 阶段若人力充裕可与 D 并行推进。</p>
+
+<h3>11.3 数据回填（一次性）</h3>
+<ul>
+<li><b>历史 usage → CostEvent：</b>回填供预算基线学习「同类任务 P50 成本」；口径映射表在详细设计阶段确认。</li>
+<li><b>现有 Workflow 模板 → 线性 WorkflowTemplate：</b>工具化一键导入（列 = 节点、交接 = 边）；导入是复制不是搬家，旧模板保留可用。</li>
+<li><b>活动流 → 审计账本（可选）：</b>仅回填迁移日之后的增量；历史不追账——账本从零开始更干净。</li>
+</ul>
+
+<h3>11.4 与自托管部署面的兼容</h3>
+<p>延续第 1 册验证的部署路径：NG 全部子域默认关闭，<code class="inl">make selfhost</code> 的就绪检查项不变；开启某子域 = 环境配置 + <code class="inl">up -d</code> 重建（同第 1 册远程访问调整的操作模式）。语义层若启用向量能力，需确认数据库扩展可用——该依赖作为开关前置检查，不可用则自动停留在「仅 L1」降级态（10.4），不阻塞升级。</p>
+</section>
+
+<!-- ==================== 第 12 章 实施路线图 ==================== -->
+<section class="chap" id="ch12">
+<h2><span class="cno">12</span>实施路线图与人力估算</h2>
+<p class="lead">三阶段、约 16–20 周、粗估 290 人日（±30%，概念级估算法：按子域登记项数量 × 角色复杂度系数）。每阶段以「验收门禁」收口，门禁不过不开下一阶段——延续第 2 册的门禁纪律。</p>
+
+<div class="lanes">
+<div class="lanes-title">Multica-NG 三阶段路线图（泳道视图）</div>
+<div class="lane-cols">
+<div class="lane">
+<h5>阶段一 · 地基<small>P0 · 第 1–8 周</small></h5>
+<div class="mi"><span class="prio p0">A</span><b>预算与成本治理</b>四级预算 · 三道闸门 · 熔断演练</div>
+<div class="mi"><span class="prio p0">B</span><b>工作流运行时</b>模板 / 实例 / 步骤 · Verdict 契约 · 线性导入</div>
+<div class="mi"><span class="prio p2">X</span><b>事件总线底座</b>统一事件流出账（A/B 先行接入）</div>
+<div class="gate"><b>验收门禁 G1+G2</b>预算熔断覆盖率 100% 演练通过；LinkLite 例程以 DAG 模板重跑第 2 册全场景；全子域关闭时回归逐字节一致</div>
+</div>
+<div class="lane l2x">
+<h5>阶段二 · 治理与记忆<small>P1 · 第 9–14 周</small></h5>
+<div class="mi"><span class="prio p1">C</span><b>记忆与上下文层</b>L2 语义索引 · 组装管线 · 增量事件</div>
+<div class="mi"><span class="prio p1">D</span><b>治理审计与审批</b>哈希链账本 · ApprovalGate · ToolPolicy</div>
+<div class="mi"><span class="prio p1">X</span><b>四层指标看板</b>智能体 / 工作流 / 节点 / 场景</div>
+<div class="gate"><b>验收门禁 G3+G4</b>召回评测 P95 ≤ 300ms 且显式优先不破；账本链校验通过；「谁批准的这次超预算」类查询单查可得；审批联动 e2e 走通</div>
+</div>
+<div class="lane l3x">
+<h5>阶段三 · 集成与护航<small>P2 · 第 15–20 周</small></h5>
+<div class="mi"><span class="prio p2">E</span><b>外部系统交接</b>Inbound/Outbound Hook · ExternalRef · 对账</div>
+<div class="mi"><span class="prio p2">F</span><b>CI 护航</b>Guardian · 守护状态机 · 复合质量门</div>
+<div class="mi"><span class="prio p2">X</span><b>故障演练收口</b>降级矩阵全场景注入</div>
+<div class="gate"><b>验收门禁 G5+G6</b>外部联调幂等 / 重放 / 死信全通过；flaky 自动恢复率与冲突自动解率成为可统计指标；三门质量门 e2e 通过</div>
+</div>
+</div>
+</div>
+<p class="cap">图 12-1 · 三阶段泳道。每阶段的门禁即第 1 章对应设计目标的验收口径——目标、门禁、指标三位一体。</p>
+
+<h3>12.1 人力估算（粗估 ±30%）</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th>角色</th><th style="width:16%">阶段一</th><th style="width:16%">阶段二</th><th style="width:16%">阶段三</th><th style="width:14%">合计（人日）</th></tr></thead>
+<tbody>
+<tr><td>后端（Go · 队列 / 状态机 / 事件）</td><td>60</td><td>35</td><td>25</td><td><b>120</b></td></tr>
+<tr><td>前端（Next.js · 面板 / 看板扩展）</td><td>25</td><td>20</td><td>15</td><td><b>60</b></td></tr>
+<tr><td>平台（数据 / 索引 / 部署兼容）</td><td>10</td><td>18</td><td>12</td><td><b>40</b></td></tr>
+<tr><td>测试（含故障注入演练）</td><td>15</td><td>15</td><td>20</td><td><b>50</b></td></tr>
+<tr><td>产品 / 项目（模板设计 / 评审组织）</td><td>8</td><td>6</td><td>6</td><td><b>20</b></td></tr>
+<tr><td><b>合计</b></td><td><b>118</b></td><td><b>94</b></td><td><b>78</b></td><td><b>290</b></td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 12-1 · 分角色 × 分阶段人日。按 6 人小组（2 后端 / 1 前端 / 1 平台 / 1 测试 / 0.5 PM + 子域负责人兼任）折算约 16–20 周日历时间，含每阶段 1 周缓冲。</p>
+
+<h3>12.2 风险登记册</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:8%">编号</th><th style="width:26%">风险</th><th style="width:10%">等级</th><th>对冲策略</th></tr></thead>
+<tbody>
+<tr><td><code>R1</code></td><td>CLI 用量上报误差导致预算失准</td><td><span class="tag h">中</span></td><td>5% 容差缓冲 + 预留-核销机制；影子模式期以真实数据校准单价表</td></tr>
+<tr><td><code>R2</code></td><td>工作流模板复杂度失控（用户造出巨型 DAG）</td><td><span class="tag h">中</span></td><td>模板复杂度护栏（节点 / 嵌套上限）；官方模板库给「好样式」；不做循环边降低表达自由度</td></tr>
+<tr><td><code>R3</code></td><td>语义召回质量差，稀释上下文</td><td><span class="tag h">中</span></td><td>显式优先硬规则 + 召回评测门禁（G3 含质量项）；可一键退化为仅 L1</td></tr>
+<tr><td><code>R4</code></td><td>外部系统方配合度低（不肯做 Hook / 回写）</td><td><span class="tag b">低</span></td><td>子域 E 提供轮询适配器兜底；对账报告作为推进材料</td></tr>
+<tr><td><code>R5</code></td><td>upstream 演进冲突（官方实现同类能力）</td><td><span class="tag h">中</span></td><td>全程以插件与叠加层贡献（复用官方插件机制），核心侵入最小化；若官方出同类功能则评估归一</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 12-2 · 五条主风险。R5 是开源二开的最大特有风险——「能被 upstream 吸收」其实是贡献的最好结局，架构上为此保持谦逊。</p>
+
+<div class="note info"><b>路线图的第一张卡：</b>建议实施从登记项 NG-A01（Budget 概念落库 + 默认关闭开关）开始——它无依赖、一天内可见影子账本雏形，是验证整条工程管线（build / 开关 / 回归）的最小试金石。</div>
+</section>
+
+
+<!-- ==================== 附录 A：变更登记清单 ==================== -->
+<section class="chap" id="apx-a">
+<h2><span class="apx-badge">附录 A</span>变更登记清单（可勾选跟踪）</h2>
+<p class="lead">Multica-NG 全部 43 条变更登记项。用法：逐项勾选即视为该变更已落地（进度存本机浏览器）；「编号」可直接作为导入工作区看板的 issue 标题前缀。合计粗估 176 人日，与第 12 章路线图（含联调与演练共 290 人日）口径衔接。</p>
+
+<div class="reg-tools" id="reg-tools">
+<span class="rt-l">优先级</span>
+<button class="reg-btn on" data-fp="">全部</button>
+<button class="reg-btn" data-fp="p0">P0</button>
+<button class="reg-btn" data-fp="p1">P1</button>
+<button class="reg-btn" data-fp="p2">P2</button>
+<span class="rt-l" style="margin-left:10px">子域</span>
+<button class="reg-btn on" data-fd="">全部</button>
+<button class="reg-btn" data-fd="a">A 预算</button>
+<button class="reg-btn" data-fd="b">B 工作流</button>
+<button class="reg-btn" data-fd="c">C 记忆</button>
+<button class="reg-btn" data-fd="d">D 治理</button>
+<button class="reg-btn" data-fd="e">E 外部</button>
+<button class="reg-btn" data-fd="f">F CI</button>
+<button class="reg-btn" data-fd="x">横切</button>
+<span class="reg-cnt" id="reg-cnt"></span>
+</div>
+
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:4%">✓</th><th style="width:9%">编号</th><th style="width:12%">类型</th><th>变更内容</th><th style="width:8%">优先级</th><th style="width:9%">人日</th></tr></thead>
+<tbody id="reg-body">
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>Budget</code> 四级预算对象（工作区 / 项目 / 智能体 / 运行），取最严生效</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A02</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>BudgetPolicy</code> 策略包：周期重置、预警目标、恢复方式</td><td><span class="prio p0">P0</span></td><td>2</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A03</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>CostEvent</code> append-only 成本事件流（四维归属 + 计量）</td><td><span class="prio p0">P0</span></td><td>4</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A04</td><td><span class="tag h">扩展概念</span></td><td class="reg-txt"><code>QuotaSnapshot</code> 余量快照（Budget 的可读视图与状态机载体）</td><td><span class="prio p0">P0</span></td><td>2</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A05</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">三道闸门挂接：入队闸（预估比对）/ 派发闸（原子预扣）/ 核销闸（冲抵）</td><td><span class="prio p0">P0</span></td><td>6</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A06</td><td><span class="tag q">新增配置</span></td><td class="reg-txt">预警线 / 熔断线 / 超限动作的工作区级默认值与覆盖</td><td><span class="prio p0">P0</span></td><td>2</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A07</td><td><span class="tag q">迁移注意</span></td><td class="reg-txt">历史 usage 回填为 CostEvent；同类任务 P50 成本学习口径</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p0" data-dom="a"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-A08</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">熔断 / 预警 / 恢复的通知链路（收件箱 + 飞书卡片）</td><td><span class="prio p0">P0</span></td><td>2</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>WorkflowTemplate</code> 声明式有向图（版本化）</td><td><span class="prio p0">P0</span></td><td>4</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B02</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>WorkflowNode</code> 六种节点类型（agent / human / squad / gateway / fanout+join / timer / subworkflow）</td><td><span class="prio p0">P0</span></td><td>5</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B03</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>WorkflowEdge</code> 条件边（消费上游 Verdict 与业务字段）</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B04</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>WorkflowInstance</code> 图实例（触发源 / 外部引用 / 整体状态）</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B05</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>StepInstance</code> + Submission / Verdict 结构化准出契约</td><td><span class="prio p0">P0</span></td><td>6</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B06</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">fan-out / AND 收敛 / 兄弟失败三策略的运行时推进</td><td><span class="prio p0">P0</span></td><td>8</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B07</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">定向返工：rework-context 注入 + <code>@节点</code> 派回原 agent</td><td><span class="prio p0">P0</span></td><td>4</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B08</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">现有 Workflow 线性模板一键导入工具（列→节点 / 交接→边）</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B09</td><td><span class="tag h">扩展概念</span></td><td class="reg-txt">Squad 作为「协作节点」入图适配（内部协议不变）</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p0" data-dom="b"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-B10</td><td><span class="tag h">扩展概念</span></td><td class="reg-txt">Autopilot 作为图触发器（定时 / 事件 → 启动图实例）</td><td><span class="prio p0">P0</span></td><td>2</td></tr>
+<tr data-prio="p1" data-dom="c"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-C01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>MemoryIndex</code> 语义层：向量 + 关键词混合索引，workspace 分片</td><td><span class="prio p1">P1</span></td><td>6</td></tr>
+<tr data-prio="p1" data-dom="c"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-C02</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>ContextAssembly</code> 组装管线：召回→过滤→排序→装箱→快照</td><td><span class="prio p1">P1</span></td><td>5</td></tr>
+<tr data-prio="p1" data-dom="c"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-C03</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>IncrementalEvent</code> 增量事件通道（心跳节拍投递，不重建快照）</td><td><span class="prio p1">P1</span></td><td>4</td></tr>
+<tr data-prio="p1" data-dom="c"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-C04</td><td><span class="tag h">扩展概念</span></td><td class="reg-txt">技能生命周期治理：候选队列 / 评审晋升 / 衰减淘汰 / 去重合并</td><td><span class="prio p1">P1</span></td><td>4</td></tr>
+<tr data-prio="p1" data-dom="c"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-C05</td><td><span class="tag q">新增配置</span></td><td class="reg-txt">token 预算装箱参数 + 被截断项「按需拉取」工具调用</td><td><span class="prio p1">P1</span></td><td>2</td></tr>
+<tr data-prio="p1" data-dom="c"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-C06</td><td><span class="tag q">迁移注意</span></td><td class="reg-txt">语义扩展前置检查；不可用自动停留「仅 L1」降级态</td><td><span class="prio p1">P1</span></td><td>2</td></tr>
+<tr data-prio="p1" data-dom="d"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-D01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>AuditLedger</code> 哈希链账本（append-only + 周期校验）</td><td><span class="prio p1">P1</span></td><td>5</td></tr>
+<tr data-prio="p1" data-dom="d"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-D02</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>ApprovalGate</code> 审批门禁（节点前置 / 预算联动 / 策略命中 / break-glass）</td><td><span class="prio p1">P1</span></td><td>4</td></tr>
+<tr data-prio="p1" data-dom="d"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-D03</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>ToolPolicy</code> 工具级策略（allow / deny / ask / auto 四动作）</td><td><span class="prio p1">P1</span></td><td>4</td></tr>
+<tr data-prio="p1" data-dom="d"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-D04</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">daemon 侧策略评估拦截点（CLI 调用前）</td><td><span class="prio p1">P1</span></td><td>4</td></tr>
+<tr data-prio="p1" data-dom="d"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-D05</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">break-glass 紧急通道 + 事后强制复盘条目入账</td><td><span class="prio p1">P1</span></td><td>2</td></tr>
+<tr data-prio="p1" data-dom="d"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-D06</td><td><span class="tag q">迁移注意</span></td><td class="reg-txt">活动流 ↔ 账本双写对账（影子期差异必须为零）</td><td><span class="prio p1">P1</span></td><td>3</td></tr>
+<tr data-prio="p2" data-dom="e"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-E01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>InboundHook</code> 入站钩子：验签 → 幂等 → template_key 路由</td><td><span class="prio p2">P2</span></td><td>4</td></tr>
+<tr data-prio="p2" data-dom="e"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-E02</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>OutboundHook</code> 出站回写：退避重投递 + 死信队列 + 人工重放</td><td><span class="prio p2">P2</span></td><td>4</td></tr>
+<tr data-prio="p2" data-dom="e"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-E03</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>ExternalRef</code> 外部对象映射 + 状态翻译表（单向真源原则）</td><td><span class="prio p2">P2</span></td><td>3</td></tr>
+<tr data-prio="p2" data-dom="e"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-E04</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">对账 Autopilot 任务：漂移报告 + 单向修正建议</td><td><span class="prio p2">P2</span></td><td>3</td></tr>
+<tr data-prio="p2" data-dom="f"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-F01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt"><code>Guardian</code> 守护智能体配置 + 专用 skill（CI 日志解读 / 冲突评估 / rebase）</td><td><span class="prio p2">P2</span></td><td>4</td></tr>
+<tr data-prio="p2" data-dom="f"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-F02</td><td><span class="tag f">新增接口</span></td><td class="reg-txt">守护状态机：flaky 重试 / 自动 rebase / 冲突复杂度分流 / 派回原节点</td><td><span class="prio p2">P2</span></td><td>6</td></tr>
+<tr data-prio="p2" data-dom="f"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-F03</td><td><span class="tag q">新增配置</span></td><td class="reg-txt">干预限速护栏 + Guardian 最小权限 ToolPolicy 预设</td><td><span class="prio p2">P2</span></td><td>2</td></tr>
+<tr data-prio="p2" data-dom="f"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-F04</td><td><span class="tag h">扩展概念</span></td><td class="reg-txt">交付节点复合质量门（Verdict × CI 守护 × 外部验收三门）</td><td><span class="prio p2">P2</span></td><td>2</td></tr>
+<tr data-prio="p0" data-dom="x"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-X01</td><td><span class="tag b">新增概念</span></td><td class="reg-txt">统一事件总线：CostEvent / Verdict / Approval / Handoff 出账</td><td><span class="prio p0">P0</span></td><td>5</td></tr>
+<tr data-prio="p1" data-dom="x"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-X02</td><td><span class="tag b">新增概念</span></td><td class="reg-txt">四层指标看板（智能体 / 工作流 / 节点 / 场景，消费事件流）</td><td><span class="prio p1">P1</span></td><td>5</td></tr>
+<tr data-prio="p0" data-dom="x"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-X03</td><td><span class="tag b">新增概念</span></td><td class="reg-txt">六子域特性开关矩阵 + 按工作区灰度</td><td><span class="prio p0">P0</span></td><td>3</td></tr>
+<tr data-prio="p1" data-dom="x"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-X04</td><td><span class="tag q">迁移注意</span></td><td class="reg-txt">四步渐进（开关→影子→双写→切主）流程工具化</td><td><span class="prio p1">P1</span></td><td>4</td></tr>
+<tr data-prio="p2" data-dom="x"><td><input type="checkbox" class="regbox"></td><td class="reg-id">NG-X05</td><td><span class="tag q">迁移注意</span></td><td class="reg-txt">故障注入演练矩阵（降级表全场景覆盖，阶段三门禁）</td><td><span class="prio p2">P2</span></td><td>5</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 A-1 · 43 条变更登记项。类型图例：<span class="tag b">新增概念</span> <span class="tag h">扩展概念</span> <span class="tag f">新增接口</span> <span class="tag q">新增配置 / 迁移注意</span>。人日为概念级粗估（±30%）。</p>
+</section>
+
+<!-- ==================== 附录 B：人机分工 RACI ==================== -->
+<section class="chap" id="apx-b">
+<h2><span class="apx-badge">附录 B</span>人机分工 RACI</h2>
+<p class="lead">Multica-NG 新增机制下「谁负责什么」的一页共识。R = 执行（Responsible），A = 拍板（Accountable），C = 被咨询（Consulted），I = 被通知（Informed）。原则延续 Multica 的产品哲学：智能体执行、人拍板。</p>
+<div class="tbl-wrap"><table>
+<thead><tr><th>事项</th><th style="width:11%">平台管理员</th><th style="width:11%">项目负责人</th><th style="width:11%">研发成员</th><th style="width:13%">helper 管家</th><th style="width:13%">业务智能体</th><th style="width:12%">Guardian</th></tr></thead>
+<tbody>
+<tr><td>预算额度设定与提额审批</td><td><b>A</b></td><td><b>R</b></td><td>C</td><td>I（预警播报）</td><td>I</td><td>—</td></tr>
+<tr><td>熔断响应与恢复决策</td><td>C</td><td><b>A / R</b></td><td>I</td><td><b>R</b>（事件通报）</td><td>I（被拒通知）</td><td>—</td></tr>
+<tr><td>工作流模板设计与导入</td><td>I</td><td><b>A</b></td><td><b>R</b></td><td>C</td><td>—</td><td>—</td></tr>
+<tr><td>Verdict 裁定落账</td><td>—</td><td>I</td><td>C</td><td>—</td><td><b>R</b>（系统校验派生）</td><td>—</td></tr>
+<tr><td>返工裁决（驳回 / 派回哪个节点）</td><td>—</td><td><b>A</b></td><td><b>R</b></td><td>C</td><td>I（携带 rework-context）</td><td>C（工程侧根因）</td></tr>
+<tr><td>工具策略（ToolPolicy）配置</td><td><b>A / R</b></td><td>C</td><td>C</td><td>—</td><td>I</td><td>I</td></tr>
+<tr><td>ask 级工具调用的人工批准</td><td>—</td><td><b>A</b></td><td><b>R</b></td><td>—</td><td>I（暂停等待）</td><td>—</td></tr>
+<tr><td>技能评审晋升 / 淘汰</td><td>—</td><td><b>A</b></td><td><b>R</b></td><td><b>R</b>（候选整理）</td><td>I</td><td>—</td></tr>
+<tr><td>CI 干预（重试 / rebase / 派回）</td><td>—</td><td>I</td><td>I</td><td>—</td><td>C（被派回时）</td><td><b>R</b></td></tr>
+<tr><td>合并决定（最后一道门）</td><td>—</td><td><b>A</b></td><td><b>R</b></td><td>—</td><td>—</td><td>止步于「待合并」</td></tr>
+<tr><td>外部对账漂移修正</td><td>C</td><td><b>A</b></td><td><b>R</b></td><td><b>R</b>（对账报告生成）</td><td>—</td><td>—</td></tr>
+<tr><td>审计链周期校验</td><td><b>A / R</b></td><td>I</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 B-1 · RACI 矩阵。注意两个刻意的「—」：Guardian 永远不碰合并决定；业务智能体对预算只有知情权——权与钱分开，是治理层的两条高压线。</p>
+</section>
+
+<!-- ==================== 附录 C：术语表与三册对照 ==================== -->
+<section class="chap" id="apx-c">
+<h2><span class="apx-badge">附录 C</span>术语表与三册对照</h2>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:20%">术语</th><th>一句话定义</th></tr></thead>
+<tbody>
+<tr><td><code>Budget / BudgetPolicy</code></td><td>某级对象（工作区/项目/智能体/运行）的花费额度声明及其策略包</td></tr>
+<tr><td><code>CostEvent</code></td><td>不可变的成本计量事件，看板与预算共同的数据源</td></tr>
+<tr><td><code>三道闸门</code></td><td>入队闸（预估比对）、派发闸（原子预扣）、核销闸（实际冲抵）</td></tr>
+<tr><td><code>WorkflowTemplate / Instance / StepInstance</code></td><td>声明式有向图的模板、一次运行、节点的一次执行</td></tr>
+<tr><td><code>Submission / Verdict</code></td><td>节点完成时的结构化提交物；系统校验后派生的流程裁定（pass/fail/blocked/rework）</td></tr>
+<tr><td><code>fan-out / AND 收敛</code></td><td>并行拆分子步骤；全部完成才推进汇聚节点</td></tr>
+<tr><td><code>rework-context</code></td><td>定向返工时注入的驳回原因 + 受影响范围 + 上轮指标</td></tr>
+<tr><td><code>L1 显式层 / L2 语义层</code></td><td>人工挂载的技能库（保留）与新增的混合检索记忆索引</td></tr>
+<tr><td><code>ContextAssembly</code></td><td>上下文组装管线：召回→过滤→排序→装箱→快照</td></tr>
+<tr><td><code>IncrementalEvent</code></td><td>执行期间随心跳注入的新评论 / blocked / 驳回事件</td></tr>
+<tr><td><code>AuditLedger</code></td><td>append-only 哈希链审计账本，历史不可篡改</td></tr>
+<tr><td><code>ApprovalGate</code></td><td>可挂在节点 / 预算 / 工具调用前的审批门禁</td></tr>
+<tr><td><code>ToolPolicy</code></td><td>智能体工具级策略：allow / deny / ask / auto 四动作</td></tr>
+<tr><td><code>break-glass</code></td><td>紧急通道：先执行后补审批，醒目标记强制复盘</td></tr>
+<tr><td><code>Inbound/OutboundHook</code></td><td>外部事件进入平台的验签幂等入口；结果与状态交回外部的重投递出口</td></tr>
+<tr><td><code>ExternalRef</code></td><td>外部对象映射与状态翻译表（平台管执行态、外部管业务态）</td></tr>
+<tr><td><code>Guardian</code></td><td>专职 CI 护航智能体：watch CI、重试 flaky、评估冲突、派回原节点</td></tr>
+<tr><td><code>复合质量门</code></td><td>交付节点准出 = Verdict × CI 守护 ×（可选）外部验收</td></tr>
+<tr><td><code>四步渐进</code></td><td>特性开关 → 影子模式 → 双写对账 → 按工作区切主</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 C-1 · Multica-NG 术语速查。Multica 现有对象术语（工作区/任务/智能体/小队/运行/技能/自动化等）见第 2 章与官方文档。</p>
+
+<h3>三册手册对照</h3>
+<div class="tbl-wrap"><table>
+<thead><tr><th style="width:22%">册</th><th style="width:26%">定位</th><th style="width:24%">读者</th><th>典型用法</th></tr></thead>
+<tbody>
+<tr><td><b>第 1 册</b>《自部署使用与运维手册》</td><td>原理与运维：装起来、养起来</td><td>平台管理员 / 运维</td><td>部署排障、飞书接入、日常巡检 SOP</td></tr>
+<tr><td><b>第 2 册</b>《从 0 到 1 实操 Demo 教程》</td><td>动手跑通：一个例程的全生命周期</td><td>技术团队全员</td><td>照做验证、模板复用（issue / 智能体指令 / 小队）</td></tr>
+<tr><td><b>第 3 册</b>《改进架构设计书》（本册）</td><td>演进蓝图：跑起来之后往哪改</td><td>研发实现团队 / 决策者</td><td>子域拆卡（附录 A）、选型评审（第 1/3/12 章）、upstream 提案素材</td></tr>
+</tbody></table></div>
+<p class="tbl-cap">表 C-2 · 落地系列三册。本册交付物另含 Markdown 版（同内容、便于进 git 做版本化评审与 diff）。</p>
+</section>
+
+
+<footer class="footer">
+<p><b>Multica 落地系列 · 第 3 册（架构篇）</b> —— 《Multica 改进架构设计书 · Multica-NG》</p>
+<p>现状描述依据 Multica 官方公开文档与概念模型（github.com/multica-ai/multica）；改进设计参考 Paperclip、OpenAI Symphony、Anthropic Claude Managed Agents 公开资料及一线团队二次开发实践，均为概念级蓝图，落地前须经详细设计与原型验证。本册与《自部署使用与运维手册》（第 1 册）、《从 0 到 1 实操 Demo 教程》（第 2 册）配套使用。</p>
+<p>生成日期：2026-11-07 · 配套 Markdown 版同目录分发 · 文中「人日」均为概念级粗估（±30%）。</p>
+<a class="back2top" href="#top">回到封面 ↑</a>
+</footer>
+
+</div><!-- /.content -->
+</main>
+</div><!-- /.layout -->
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+
+  /* ---------- 1. 代码块复制按钮 ---------- */
+  $$(".codeblk").forEach(function (pre) {
+    if (pre.querySelector(".copy-btn")) return;
+    var btn = document.createElement("button");
+    btn.className = "copy-btn";
+    btn.type = "button";
+    btn.textContent = "复制";
+    btn.addEventListener("click", function () {
+      var text = pre.innerText;
+      function done() {
+        btn.textContent = "已复制 ✓";
+        btn.classList.add("done");
+        setTimeout(function () { btn.textContent = "复制"; btn.classList.remove("done"); }, 1600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+      } else { fallback(); }
+      function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        ta.remove();
+        done();
+      }
+    });
+    pre.appendChild(btn);
+  });
+
+  /* ---------- 2. 变更登记清单：勾选持久化 + 侧栏进度 ---------- */
+  var KEY = "multicaNG:reg";
+  var store = {};
+  try { store = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { store = {}; }
+
+  var regRows = $$("#reg-body tr");
+  regRows.forEach(function (row) {
+    var id = row.querySelector(".reg-id").textContent.trim();
+    var box = row.querySelector(".regbox");
+    box.dataset.rid = id;
+    if (store[id]) { box.checked = true; row.classList.add("reg-done"); }
+    box.addEventListener("change", function () {
+      if (box.checked) { store[id] = 1; row.classList.add("reg-done"); }
+      else { delete store[id]; row.classList.remove("reg-done"); }
+      try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {}
+      refreshReg();
+    });
+  });
+
+  function refreshReg() {
+    var total = regRows.length;
+    var done = regRows.filter(function (r) { return r.querySelector(".regbox").checked; }).length;
+    var bar = document.getElementById("sf-bar");
+    var n = document.getElementById("sf-n");
+    if (bar) bar.style.width = (total ? done / total * 100 : 0) + "%";
+    if (n) n.textContent = done + " / " + total + " 项已完成";
+  }
+
+  var reset = document.getElementById("reset-progress");
+  if (reset) {
+    reset.addEventListener("click", function () {
+      store = {};
+      try { localStorage.setItem(KEY, "{}"); } catch (e) {}
+      regRows.forEach(function (r) {
+        r.querySelector(".regbox").checked = false;
+        r.classList.remove("reg-done");
+      });
+      refreshReg();
+    });
+  }
+  refreshReg();
+
+  /* ---------- 3. 变更登记清单：优先级 × 子域组合过滤 ---------- */
+  var fp = "", fd = "";
+  var regCnt = document.getElementById("reg-cnt");
+  function applyFilter() {
+    var visible = 0;
+    regRows.forEach(function (r) {
+      var okp = !fp || r.dataset.prio === fp;
+      var okd = !fd || r.dataset.dom === fd;
+      if (okp && okd) { r.classList.remove("reg-hidden"); visible++; }
+      else { r.classList.add("reg-hidden"); }
+    });
+    if (regCnt) regCnt.textContent = visible + " / " + regRows.length + " 条";
+  }
+  $$("#reg-tools .reg-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var grp = btn.dataset.fp !== undefined ? "p" : "d";
+      if (grp === "p") {
+        fp = btn.dataset.fp;
+        $$("#reg-tools .reg-btn[data-fp]").forEach(function (b) { b.classList.toggle("on", b === btn); });
+      } else {
+        fd = btn.dataset.fd;
+        $$("#reg-tools .reg-btn[data-fd]").forEach(function (b) { b.classList.toggle("on", b === btn); });
+      }
+      applyFilter();
+    });
+  });
+  applyFilter();
+
+  /* ---------- 4. 阅读进度条 + 目录高亮 ---------- */
+  var pbar = document.getElementById("pbar");
+  var tocLinks = $$(".toc a");
+  var linkMap = {};
+  tocLinks.forEach(function (a) {
+    var id = a.getAttribute("href").slice(1);
+    linkMap[id] = a;
+  });
+  var spySections = [];
+  Object.keys(linkMap).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) spySections.push({ id: id, el: el });
+  });
+  function onScroll() {
+    var y = window.scrollY || document.documentElement.scrollTop;
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    if (pbar) pbar.style.width = (h > 0 ? Math.min(1, y / h) * 100 : 0) + "%";
+    var cur = null;
+    spySections.forEach(function (s) {
+      if (s.el.getBoundingClientRect().top <= 140) cur = s.id;
+    });
+    tocLinks.forEach(function (a) { a.classList.remove("on"); });
+    if (cur && linkMap[cur]) linkMap[cur].classList.add("on");
+  }
+  var ticking = false;
+  window.addEventListener("scroll", function () {
+    if (!ticking) {
+      window.requestAnimationFrame(function () { onScroll(); ticking = false; });
+      ticking = true;
+    }
+  }, { passive: true });
+  onScroll();
+
+  /* ---------- 5. 移动端目录 ---------- */
+  var hamburger = document.getElementById("hamburger");
+  var sidebar = document.getElementById("sidebar");
+  if (hamburger && sidebar) {
+    hamburger.addEventListener("click", function () { sidebar.classList.toggle("open"); });
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function () { sidebar.classList.remove("open"); });
+    });
+  }
+
+  /* ---------- 6. 打印前展开全部折叠块 ---------- */
+  window.addEventListener("beforeprint", function () {
+    $$("details").forEach(function (d) { d.open = true; });
+  });
+})();
+</script>
+</body>
+</html>
