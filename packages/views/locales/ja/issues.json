@@ -1806,6 +1806,69 @@
           "waiting": "返答待ち"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "承認後に：",
+      "steps_label": "実行内容：",
+      "terms_label": "用語：",
+      "evidence_toggle": "元のブリーフを表示",
+      "risk": {
+        "data_loss": "データ消失",
+        "irreversible": "元に戻せない操作",
+        "external_effect": "外部へ影響",
+        "network_fetch": "ネットワークから取得"
+      },
+      "term": {
+        "force_push": "リモート履歴を強制上書き",
+        "run_command": "コマンドを実行",
+        "install_packages": "パッケージを導入",
+        "publish_public": "公開パッケージとして公開",
+        "run_tests": "テストを実行",
+        "build": "プロジェクトをビルド",
+        "push_remote": "リモートへ送信",
+        "commit": "コミットを作成",
+        "merge_branches": "ブランチを統合",
+        "reset_hard": "ローカル変更を破棄",
+        "docker": "コンテナを実行",
+        "deploy_cluster": "クラスタへデプロイ",
+        "fetch_network": "ネットワークから取得",
+        "delete_files": "ファイルを削除",
+        "secrets": "機密情報を扱う",
+        "db_migration": "DB移行を実行",
+        "pull_request": "PRを作成",
+        "issue_status": "課題を移動"
+      }
+    },
+    "verdict": {
+      "title": "レビュー結論",
+      "hint": "結論はこの移動とともにタイムラインに記録されます。",
+      "option": {
+        "pass": "合格",
+        "reject": "差し戻し",
+        "conditional_pass": "条件付き合格"
+      },
+      "option_hint": {
+        "pass": "成果は基準を満たしています。次へ進めます。",
+        "reject": "元の列へ戻します。理由が次のランが直すべき内容を示します。",
+        "conditional_pass": "条件付きで通します。条件は下のメモに記録します。"
+      },
+      "reasons_label": "理由（複数選択可）：",
+      "reason": {
+        "goal_met": "目標を達成",
+        "quality_below_bar": "品質が基準未満",
+        "scope_crept": "要求の範囲を超えた",
+        "risk_not_worth_it": "リスクが見合わない",
+        "needs_human_check": "人の確認が必要",
+        "incomplete_evidence": "根拠が不足"
+      },
+      "note_label": "メモ（任意）",
+      "note_placeholder": "一行で、タイムラインに表示されます。",
+      "chip": {
+        "pass": "合格",
+        "reject": "差し戻し",
+        "conditional_pass": "条件付き合格"
+      },
+      "conditional_open": "条件は未解決です。解決前にこの課題を閉じないでください。"
     }
   },
   "hover_card": {

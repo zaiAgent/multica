@@ -1883,6 +1883,69 @@
           "waiting": "En attente du retour"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "Après votre accord :",
+      "steps_label": "Ce que cela fait :",
+      "terms_label": "Termes :",
+      "evidence_toggle": "Voir le brief d'origine",
+      "risk": {
+        "data_loss": "Perte de données",
+        "irreversible": "Irréversible",
+        "external_effect": "Sort de la machine",
+        "network_fetch": "Lit depuis le réseau"
+      },
+      "term": {
+        "force_push": "Écraser l'historique distant",
+        "run_command": "Exécuter une commande",
+        "install_packages": "Installer des paquets",
+        "publish_public": "Publier publiquement",
+        "run_tests": "Lancer les tests",
+        "build": "Compiler le projet",
+        "push_remote": "Envoyer vers le dépôt distant",
+        "commit": "Créer un commit",
+        "merge_branches": "Fusionner des branches",
+        "reset_hard": "Annuler les modifications locales",
+        "docker": "Exécuter un conteneur",
+        "deploy_cluster": "Déployer sur le cluster",
+        "fetch_network": "Télécharger depuis le réseau",
+        "delete_files": "Supprimer des fichiers",
+        "secrets": "Touche des secrets",
+        "db_migration": "Exécuter une migration de base de données",
+        "pull_request": "Ouvrir une pull request",
+        "issue_status": "Déplacer le ticket"
+      }
+    },
+    "verdict": {
+      "title": "Conclusion de la revue",
+      "hint": "Votre conclusion est enregistrée avec ce déplacement dans la chronologie.",
+      "option": {
+        "pass": "Valider",
+        "reject": "Rejeter",
+        "conditional_pass": "Validation conditionnelle"
+      },
+      "option_hint": {
+        "pass": "Le travail est conforme : laissez-le avancer.",
+        "reject": "Renvoyez-le d'où il vient ; la raison dit au prochain run quoi corriger.",
+        "conditional_pass": "Validez-le, avec les conditions notées ci-dessous."
+      },
+      "reasons_label": "Pourquoi (plusieurs choix possibles) :",
+      "reason": {
+        "goal_met": "Objectif atteint",
+        "quality_below_bar": "Sous la barre de qualité",
+        "scope_crept": "Plus que demandé",
+        "risk_not_worth_it": "Le risque ne vaut pas le coup",
+        "needs_human_check": "Vérification humaine requise",
+        "incomplete_evidence": "Preuves insuffisantes"
+      },
+      "note_label": "Note (facultatif)",
+      "note_placeholder": "Une ligne, affichée dans la chronologie.",
+      "chip": {
+        "pass": "Validé",
+        "reject": "Rejeté",
+        "conditional_pass": "Validation conditionnelle"
+      },
+      "conditional_open": "Les conditions restent ouvertes ; résolvez-les avant de fermer ce ticket."
     }
   },
   "hover_card": {

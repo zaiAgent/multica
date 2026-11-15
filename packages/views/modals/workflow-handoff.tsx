@@ -28,10 +28,21 @@ export function WorkflowHandoffModal({
       issue={{ id: issueId, identifier }}
       toStatus={status}
       onCancel={onClose}
-      onConfirm={({ stopPreviousRuns }) => {
+      onConfirm={({ stopPreviousRuns, reviewVerdict, reviewReasons, reviewNote }) => {
         onClose();
         updateIssue.mutate(
-          { id: issueId, status, ...(stopPreviousRuns ? { stop_previous_assignee_runs: true } : {}) },
+          {
+            id: issueId,
+            status,
+            ...(stopPreviousRuns ? { stop_previous_assignee_runs: true } : {}),
+            ...(reviewVerdict
+              ? {
+                  review_verdict: reviewVerdict,
+                  review_reasons: reviewReasons.join(","),
+                  review_note: reviewNote,
+                }
+              : {}),
+          },
           {
             onError: (err) =>
               toast.error(err instanceof Error && err.message ? err.message : t(($) => $.detail.update_failed)),

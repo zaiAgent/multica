@@ -1806,6 +1806,69 @@
           "waiting": "회신 대기"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "승인 후:",
+      "steps_label": "수행 내용:",
+      "terms_label": "용어:",
+      "evidence_toggle": "원본 브리프 보기",
+      "risk": {
+        "data_loss": "데이터 손실",
+        "irreversible": "되돌릴 수 없음",
+        "external_effect": "외부에 영향",
+        "network_fetch": "네트워크에서 가져옴"
+      },
+      "term": {
+        "force_push": "원격 히스토리 강제 덮어쓰기",
+        "run_command": "명령 실행",
+        "install_packages": "패키지 설치",
+        "publish_public": "공개 패키지로 게시",
+        "run_tests": "테스트 실행",
+        "build": "프로젝트 빌드",
+        "push_remote": "원격으로 전송",
+        "commit": "커밋 생성",
+        "merge_branches": "브랜치 병합",
+        "reset_hard": "로컬 변경 버리기",
+        "docker": "컨테이너 실행",
+        "deploy_cluster": "클러스터에 배포",
+        "fetch_network": "네트워크에서 다운로드",
+        "delete_files": "파일 삭제",
+        "secrets": "비밀값 다룸",
+        "db_migration": "DB 마이그레이션 실행",
+        "pull_request": "PR 생성",
+        "issue_status": "이슈 이동"
+      }
+    },
+    "verdict": {
+      "title": "검토 결론",
+      "hint": "결론은 이동과 함께 타임라인에 기록됩니다.",
+      "option": {
+        "pass": "통과",
+        "reject": "반려",
+        "conditional_pass": "조건부 통과"
+      },
+      "option_hint": {
+        "pass": "결과가 기준에 맞습니다. 다음으로 진행합니다.",
+        "reject": "원래 칼럼으로 돌려보냅니다. 사유가 다음 실행이 고칠 내용입니다.",
+        "conditional_pass": "조건과 함께 통과합니다. 조건은 아래 메모에 기록됩니다."
+      },
+      "reasons_label": "사유(여러 개 선택 가능):",
+      "reason": {
+        "goal_met": "목표 달성",
+        "quality_below_bar": "품질 미달",
+        "scope_crept": "요청 범위 초과",
+        "risk_not_worth_it": "위험이 큼",
+        "needs_human_check": "사람 확인 필요",
+        "incomplete_evidence": "근거 부족"
+      },
+      "note_label": "메모(선택)",
+      "note_placeholder": "한 줄로 타임라인에 표시됩니다.",
+      "chip": {
+        "pass": "통과",
+        "reject": "반려",
+        "conditional_pass": "조건부 통과"
+      },
+      "conditional_open": "조건이 아직 해결되지 않았습니다. 해결 전에 이슈를 닫지 마세요."
     }
   },
   "hover_card": {

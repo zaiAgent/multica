@@ -1806,6 +1806,69 @@
           "waiting": "等待反馈"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "放行后：",
+      "steps_label": "它要做的事：",
+      "terms_label": "术语：",
+      "evidence_toggle": "查看原始说明",
+      "risk": {
+        "data_loss": "数据丢失",
+        "irreversible": "不可逆操作",
+        "external_effect": "影响外部环境",
+        "network_fetch": "从网络读取"
+      },
+      "term": {
+        "force_push": "强制覆盖远端历史",
+        "run_command": "运行命令",
+        "install_packages": "安装依赖包",
+        "publish_public": "发布到公网",
+        "run_tests": "运行测试",
+        "build": "构建项目",
+        "push_remote": "推送到远端仓库",
+        "commit": "创建提交",
+        "merge_branches": "合并分支",
+        "reset_hard": "丢弃本地改动",
+        "docker": "运行容器",
+        "deploy_cluster": "部署到集群",
+        "fetch_network": "从网络下载",
+        "delete_files": "删除文件",
+        "secrets": "涉及密钥",
+        "db_migration": "执行数据库迁移",
+        "pull_request": "发起合并请求",
+        "issue_status": "移动任务"
+      }
+    },
+    "verdict": {
+      "title": "审核结论",
+      "hint": "结论会随本次移动记入时间线。",
+      "option": {
+        "pass": "通过",
+        "reject": "驳回",
+        "conditional_pass": "有条件通过"
+      },
+      "option_hint": {
+        "pass": "工作达标，放行进入下一列。",
+        "reject": "退回原列，理由会告诉下一个 Run 要修什么。",
+        "conditional_pass": "放行，条件记录在下方备注中。"
+      },
+      "reasons_label": "理由（可多选）：",
+      "reason": {
+        "goal_met": "达成目标",
+        "quality_below_bar": "质量未达标",
+        "scope_crept": "超出了要求范围",
+        "risk_not_worth_it": "风险不值得放行",
+        "needs_human_check": "需要人工检查",
+        "incomplete_evidence": "证据不足"
+      },
+      "note_label": "备注（可选）",
+      "note_placeholder": "一句话，将显示在时间线。",
+      "chip": {
+        "pass": "通过",
+        "reject": "驳回",
+        "conditional_pass": "有条件通过"
+      },
+      "conditional_open": "条件尚未解决；解决前该任务不应关闭。"
     }
   },
   "hover_card": {

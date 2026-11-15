@@ -3810,6 +3810,21 @@ type UpdateIssueRequest struct {
 	// project move without it is administrative. Batch updates ignore it.
 	// (MUL-7420)
 	EnterWorkflowStep bool `json:"enter_workflow_step,omitempty"`
+	// ReviewVerdict is the human reviewer's conclusion recorded with a
+	// status change out of the in-review column (MUL-8620, review plan
+	// AR-04): "pass", "reject" or "conditional_pass". Write-only - it rides
+	// the issue:updated event into the status-change timeline entry's details
+	// and is never stored on the issue itself. Agents cannot set it: a
+	// verdict is the reviewer's own words. Batch updates reject it, like a
+	// duplicate mark, because one conclusion belongs to one issue's review.
+	ReviewVerdict string `json:"review_verdict,omitempty"`
+	// ReviewReasons carries the reason keys the reviewer picked
+	// ("quality_below_bar", ...), comma-joined. Translated by the client at
+	// render; never localized on the server. Requires ReviewVerdict.
+	ReviewReasons string `json:"review_reasons,omitempty"`
+	// ReviewNote is the reviewer's one-line reason or the conditions of a
+	// conditional pass, recorded beside the verdict. Requires ReviewVerdict.
+	ReviewNote string `json:"review_note,omitempty"`
 	// DuplicateOfIssueID marks this issue as a duplicate of another issue in
 	// the same workspace (MUL-7349). A duplicate is an ordinary cancelled issue
 	// that remembers its original, so this also sets status to cancelled.
@@ -3817,6 +3832,24 @@ type UpdateIssueRequest struct {
 	// no explicit null. Write-only: read the relation back from
 	// GET /api/issues/{id}/duplicates. Not accepted by batch updates.
 	DuplicateOfIssueID *string `json:"duplicate_of_issue_id,omitempty"`
+}
+
+// validateReviewVerdict checks the reviewer-conclusion fields of an issue
+// write (MUL-8620, AR-04): a present verdict must name one of the three
+// conclusions, and reasons/note ride only with a verdict. Empty verdict with
+// empty reasons and note is the ordinary write and passes untouched.
+func validateReviewVerdict(verdict, reasons, note string) error {
+	if verdict == "" {
+		if reasons != "" || note != "" {
+			return errors.New("review_reasons and review_note require review_verdict")
+		}
+		return nil
+	}
+	switch verdict {
+	case "pass", "reject", "conditional_pass":
+		return nil
+	}
+	return errors.New("review_verdict must be one of pass, reject, conditional_pass")
 }
 
 func mergeIssueChannelMediaDescription(current, incoming string, base *string, attachments []db.Attachment) string {
@@ -4031,6 +4064,14 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	// Track which fields were explicitly present in JSON (even if null)
 	var rawFields map[string]json.RawMessage
 	json.Unmarshal(bodyBytes, &rawFields)
+
+	// The reviewer's conclusion fields are write-only and strict: a verdict
+	// names one of the three conclusions, and reasons/note ride only with
+	// one (MUL-8620, AR-04).
+	if err := validateReviewVerdict(req.ReviewVerdict, req.ReviewReasons, req.ReviewNote); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	if prevIssue.TriageState.Valid {
 		if field := triageLockedField(rawFields); field != "" {
@@ -4400,6 +4441,21 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	if handoff != nil {
 		updatedPayload["workflow_handoff"] = workflowHandoffPayload(issue, handoff, h.workflowHandoffBrief(r.Context(), issue, handoff), willRun)
+	}
+	// The reviewer's conclusion rides the same event (MUL-8620, AR-04): it
+	// is recorded only on the move it concludes - a status change out of
+	// in-review made by a member; an agent never writes a reviewer's
+	// verdict, and any other write keeps the field ignored, so a stale
+	// client cannot stamp conclusions on unrelated changes.
+	if req.ReviewVerdict != "" && statusChanged &&
+		prevIssue.Status == issuestatus.InReview && actorType != "agent" {
+		updatedPayload["review_verdict"] = req.ReviewVerdict
+		if req.ReviewReasons != "" {
+			updatedPayload["review_reasons"] = req.ReviewReasons
+		}
+		if req.ReviewNote != "" {
+			updatedPayload["review_note"] = req.ReviewNote
+		}
 	}
 	h.publish(protocol.EventIssueUpdated, workspaceID, actorType, actorID, updatedPayload)
 	if attachmentsChanged {
@@ -4840,6 +4896,13 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, ok := rawUpdates["duplicate_of_issue_id"]; ok {
 		writeError(w, http.StatusBadRequest, "duplicate_of_issue_id is not supported in batch updates")
+		return
+	}
+
+	// One review conclusion belongs to one issue's review (MUL-8620), so a
+	// batch cannot carry verdicts - exactly like a duplicate mark.
+	if _, ok := rawUpdates["review_verdict"]; ok {
+		writeError(w, http.StatusBadRequest, "review_verdict is not supported in batch updates")
 		return
 	}
 

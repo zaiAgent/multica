@@ -199,10 +199,21 @@ export function StatusPicker({
         issue={pendingStatus ? issue : null}
         toStatus={pendingStatus ?? ""}
         onCancel={() => setPendingStatus(null)}
-        onConfirm={({ stopPreviousRuns }) => {
+        onConfirm={({ stopPreviousRuns, reviewVerdict, reviewReasons, reviewNote }) => {
           const next = pendingStatus;
           setPendingStatus(null);
-          if (next) onUpdate({ status: next, ...(stopPreviousRuns ? { stop_previous_assignee_runs: true } : {}) });
+          if (next)
+            onUpdate({
+              status: next,
+              ...(stopPreviousRuns ? { stop_previous_assignee_runs: true } : {}),
+              ...(reviewVerdict
+                ? {
+                    review_verdict: reviewVerdict,
+                    review_reasons: reviewReasons.join(","),
+                    review_note: reviewNote,
+                  }
+                : {}),
+            });
         }}
       />
     )}

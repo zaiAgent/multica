@@ -94,6 +94,17 @@ export interface UpdateIssueRequest {
    *  cancelled removes the mark. Write-only — read it back through
    *  `listIssueDuplicates`. Control field: strip from optimistic patches. */
   duplicate_of_issue_id?: string;
+  /** The reviewer's conclusion recorded with a status change that leaves the
+   *  in-review column (MUL-8620, AR-04): "pass" | "reject" |
+   *  "conditional_pass". Write-only — it rides the change into the timeline
+   *  entry's details and is never stored on the issue itself. Control field:
+   *  strip from optimistic patches. */
+  review_verdict?: "pass" | "reject" | "conditional_pass";
+  /** Comma-joined reason keys the reviewer picked ("quality_below_bar", …);
+   *  translated at render. Control field. */
+  review_reasons?: string;
+  /** The reviewer's one-line reason or conditions. Control field. */
+  review_note?: string;
 }
 
 /** Label changes for a batch update; add and remove leave other labels alone, clear removes every label not being added. */

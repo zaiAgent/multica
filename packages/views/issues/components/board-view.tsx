@@ -940,7 +940,7 @@ function BoardViewImpl({
       issue={pendingHandoff?.issue ?? null}
       toStatus={pendingHandoff?.status ?? ""}
       onCancel={() => setPendingHandoff(null)}
-      onConfirm={({ stopPreviousRuns }) => {
+      onConfirm={({ stopPreviousRuns, reviewVerdict, reviewReasons, reviewNote }) => {
         const pending = pendingHandoff;
         setPendingHandoff(null);
         if (!pending) return;
@@ -950,6 +950,13 @@ function BoardViewImpl({
             ...pending.updates,
             ...pending.anchors,
             ...(stopPreviousRuns ? { stop_previous_assignee_runs: true } : {}),
+            ...(reviewVerdict
+              ? {
+                  review_verdict: reviewVerdict,
+                  review_reasons: reviewReasons.join(","),
+                  review_note: reviewNote,
+                }
+              : {}),
           },
           beginSettle(),
         );

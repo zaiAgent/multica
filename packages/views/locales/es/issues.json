@@ -1876,6 +1876,69 @@
           "waiting": "Esperando al informador"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "Tras tu aprobación:",
+      "steps_label": "Qué hace:",
+      "terms_label": "Términos:",
+      "evidence_toggle": "Ver el brief original",
+      "risk": {
+        "data_loss": "Pérdida de datos",
+        "irreversible": "Irreversible",
+        "external_effect": "Sale de tu máquina",
+        "network_fetch": "Lee de la red"
+      },
+      "term": {
+        "force_push": "Sobrescribir el historial remoto",
+        "run_command": "Ejecutar un comando",
+        "install_packages": "Instalar paquetes",
+        "publish_public": "Publicar públicamente",
+        "run_tests": "Ejecutar los tests",
+        "build": "Compilar el proyecto",
+        "push_remote": "Subir al repositorio remoto",
+        "commit": "Crear un commit",
+        "merge_branches": "Fusionar ramas",
+        "reset_hard": "Descartar cambios locales",
+        "docker": "Ejecutar un contenedor",
+        "deploy_cluster": "Desplegar en el clúster",
+        "fetch_network": "Descargar de la red",
+        "delete_files": "Borrar archivos",
+        "secrets": "Toca secretos",
+        "db_migration": "Ejecutar una migración de base de datos",
+        "pull_request": "Abrir una pull request",
+        "issue_status": "Mover el issue"
+      }
+    },
+    "verdict": {
+      "title": "Conclusión de revisión",
+      "hint": "Tu conclusión queda registrada en la cronología junto con este movimiento.",
+      "option": {
+        "pass": "Aprobar",
+        "reject": "Rechazar",
+        "conditional_pass": "Aprobación condicional"
+      },
+      "option_hint": {
+        "pass": "El trabajo cumple: déjalo avanzar.",
+        "reject": "Devuélvelo a su columna; el motivo dice qué corregir al siguiente run.",
+        "conditional_pass": "Apruébalo con las condiciones anotadas abajo."
+      },
+      "reasons_label": "Por qué (elige lo que aplique):",
+      "reason": {
+        "goal_met": "Cumple el objetivo",
+        "quality_below_bar": "Bajo el listón de calidad",
+        "scope_crept": "Hizo más de lo pedido",
+        "risk_not_worth_it": "El riesgo no compensa",
+        "needs_human_check": "Requiere revisión humana",
+        "incomplete_evidence": "Evidencia insuficiente"
+      },
+      "note_label": "Nota (opcional)",
+      "note_placeholder": "Una línea; se ve en la cronología.",
+      "chip": {
+        "pass": "Aprobado",
+        "reject": "Rechazado",
+        "conditional_pass": "Aprobación condicional"
+      },
+      "conditional_open": "Las condiciones siguen abiertas; resuélvelas antes de cerrar este issue."
     }
   },
   "hover_card": {

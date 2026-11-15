@@ -860,7 +860,10 @@ function ActivityBlock({
           );
         }
 
-        const handoff = isStatusChange && !!details.handoff_to_id;
+        // A review exit that hands off to nobody still carries the reviewer's
+        // conclusion, so the timeline renders it (MUL-8620, AR-06).
+        const handoff =
+          isStatusChange && (!!details.handoff_to_id || ["pass", "reject", "conditional_pass"].includes(details.review_verdict ?? ""));
         return (
           <div key={entry.id} className="text-label text-muted-foreground">
             <div className="flex items-center">

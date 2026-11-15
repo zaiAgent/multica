@@ -1883,6 +1883,69 @@
           "waiting": "Waiting on reporter"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "After you allow this:",
+      "steps_label": "What it does:",
+      "terms_label": "Terms:",
+      "evidence_toggle": "Show the original brief",
+      "risk": {
+        "data_loss": "Data loss",
+        "irreversible": "Irreversible",
+        "external_effect": "Leaves your machine",
+        "network_fetch": "Reads from the network"
+      },
+      "term": {
+        "force_push": "Overwrite remote history",
+        "run_command": "Run a command",
+        "install_packages": "Install packages",
+        "publish_public": "Publish publicly",
+        "run_tests": "Run the tests",
+        "build": "Build the project",
+        "push_remote": "Upload to the remote",
+        "commit": "Create a commit",
+        "merge_branches": "Merge branches",
+        "reset_hard": "Discard local changes",
+        "docker": "Run a container",
+        "deploy_cluster": "Deploy to the cluster",
+        "fetch_network": "Download from the network",
+        "delete_files": "Delete files",
+        "secrets": "Touches secrets",
+        "db_migration": "Run a database migration",
+        "pull_request": "Open a pull request",
+        "issue_status": "Move the issue"
+      }
+    },
+    "verdict": {
+      "title": "Review conclusion",
+      "hint": "Your conclusion is recorded with this move on the timeline.",
+      "option": {
+        "pass": "Pass",
+        "reject": "Reject",
+        "conditional_pass": "Conditional pass"
+      },
+      "option_hint": {
+        "pass": "The work is good — let it move on.",
+        "reject": "Send it back; the reason tells the next run what to fix.",
+        "conditional_pass": "Pass it, with the conditions noted below."
+      },
+      "reasons_label": "Why (pick what applies):",
+      "reason": {
+        "goal_met": "Met the goal",
+        "quality_below_bar": "Below the quality bar",
+        "scope_crept": "Did more than asked",
+        "risk_not_worth_it": "The risk isn't worth it",
+        "needs_human_check": "Needs a human check",
+        "incomplete_evidence": "Not enough evidence"
+      },
+      "note_label": "Note (optional)",
+      "note_placeholder": "One line — it reads on the timeline.",
+      "chip": {
+        "pass": "Pass",
+        "reject": "Rejected",
+        "conditional_pass": "Conditional pass"
+      },
+      "conditional_open": "The conditions are still open; resolve them before this issue closes."
     }
   },
   "hover_card": {

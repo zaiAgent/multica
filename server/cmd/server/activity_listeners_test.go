@@ -306,6 +306,64 @@ func TestActivityIssueUpdated_WorkflowHandoff(t *testing.T) {
 	}
 }
 
+// TestActivityIssueUpdated_ReviewVerdict pins the reviewer's conclusion on
+// the status row it concludes (MUL-8620, AR-04): a review exit out of
+// in_review records the verdict, its reason keys, and the note beside the
+// move, in the same timeline entry.
+func TestActivityIssueUpdated_ReviewVerdict(t *testing.T) {
+	queries := db.New(testPool)
+	bus := events.New()
+	registerActivityListeners(bus, queries)
+
+	issueID := createTestIssue(t, testWorkspaceID, testUserID)
+	t.Cleanup(func() {
+		cleanupActivities(t, issueID)
+		cleanupTestIssue(t, issueID)
+	})
+
+	bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: testWorkspaceID,
+		ActorType:   "member",
+		ActorID:     testUserID,
+		Payload: map[string]any{
+			"issue": handler.IssueResponse{
+				ID:          issueID,
+				WorkspaceID: testWorkspaceID,
+				Title:       "activity test issue",
+				Status:      "done",
+				Priority:    "medium",
+				CreatorType: "member",
+				CreatorID:   testUserID,
+			},
+			"status_changed": true,
+			"prev_status":    "in_review",
+			"review_verdict": "conditional_pass",
+			"review_reasons": "needs_human_check,incomplete_evidence",
+			"review_note":    "Merge only after the migration is green",
+		},
+	})
+
+	activities := listActivitiesForIssue(t, queries, issueID)
+	if len(activities) != 1 || activities[0].Action != "status_changed" {
+		t.Fatalf("expected one status_changed activity, got %+v", activities)
+	}
+	var details map[string]string
+	if err := json.Unmarshal(activities[0].Details, &details); err != nil {
+		t.Fatalf("failed to unmarshal details: %v", err)
+	}
+	for key, want := range map[string]string{
+		"from": "in_review", "to": "done",
+		"review_verdict": "conditional_pass",
+		"review_reasons": "needs_human_check,incomplete_evidence",
+		"review_note":    "Merge only after the migration is green",
+	} {
+		if details[key] != want {
+			t.Fatalf("details[%q] = %q, want %q (all: %v)", key, details[key], want, details)
+		}
+	}
+}
+
 func TestActivityIssueUpdated_NoChangeFlags(t *testing.T) {
 	queries := db.New(testPool)
 	bus := events.New()

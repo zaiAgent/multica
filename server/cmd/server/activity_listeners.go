@@ -93,6 +93,18 @@ func registerActivityListeners(bus *events.Bus, queries *db.Queries) {
 			for k, v := range handoff {
 				detailsMap["handoff_"+k] = v
 			}
+			// The reviewer's conclusion rides the status row it
+			// concludes (MUL-8620, AR-04): one timeline entry holds
+			// the move, the handoff, and the human verdict on it.
+			if verdict, _ := payload["review_verdict"].(string); verdict != "" {
+				detailsMap["review_verdict"] = verdict
+				if reasons, _ := payload["review_reasons"].(string); reasons != "" {
+					detailsMap["review_reasons"] = reasons
+				}
+				if note, _ := payload["review_note"].(string); note != "" {
+					detailsMap["review_note"] = note
+				}
+			}
 			// PR auto-complete (MUL-7429): say why the status moved, so the
 			// timeline explains the change without a hidden rule.
 			if source, _ := payload["source"].(string); source == "pr_automation" {

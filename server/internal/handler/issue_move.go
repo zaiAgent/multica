@@ -26,6 +26,12 @@ var issueMoveFields = map[string]struct{}{
 	// A drag onto a workflow handoff step can stop the previous agent's run,
 	// exactly as the same status change through UpdateIssue can. (MUL-7420)
 	"stop_previous_assignee_runs": {},
+	// A drag out of the in-review column can carry the reviewer's
+	// conclusion, exactly as the same status change through UpdateIssue
+	// can. (MUL-8620)
+	"review_verdict": {},
+	"review_reasons": {},
+	"review_note":    {},
 }
 
 // MoveIssue accepts relative neighbors instead of a client-authored canonical

@@ -1806,6 +1806,69 @@
           "waiting": "等待反饋"
         }
       }
+    },
+    "plain": {
+      "next_move_label": "放行後：",
+      "steps_label": "它要做的事：",
+      "terms_label": "術語：",
+      "evidence_toggle": "檢視原始說明",
+      "risk": {
+        "data_loss": "資料遺失",
+        "irreversible": "不可逆操作",
+        "external_effect": "影響外部環境",
+        "network_fetch": "從網路讀取"
+      },
+      "term": {
+        "force_push": "強制覆寫遠端歷史",
+        "run_command": "執行命令",
+        "install_packages": "安裝相依套件",
+        "publish_public": "發佈到公網",
+        "run_tests": "執行測試",
+        "build": "建置專案",
+        "push_remote": "推送到遠端儲存庫",
+        "commit": "建立提交",
+        "merge_branches": "合併分支",
+        "reset_hard": "捨棄本機變更",
+        "docker": "執行容器",
+        "deploy_cluster": "部署到叢集",
+        "fetch_network": "從網路下載",
+        "delete_files": "刪除檔案",
+        "secrets": "涉及密鑰",
+        "db_migration": "執行資料庫遷移",
+        "pull_request": "發起合併請求",
+        "issue_status": "移動任務"
+      }
+    },
+    "verdict": {
+      "title": "審核結論",
+      "hint": "結論會隨本次移動記入時間線。",
+      "option": {
+        "pass": "通過",
+        "reject": "駁回",
+        "conditional_pass": "有條件通過"
+      },
+      "option_hint": {
+        "pass": "工作達標，放行進入下一列。",
+        "reject": "退回原列，理由會告訴下一個 Run 要修什麼。",
+        "conditional_pass": "放行，條件記錄在下方備註中。"
+      },
+      "reasons_label": "理由（可複選）：",
+      "reason": {
+        "goal_met": "達成目標",
+        "quality_below_bar": "品質未達標",
+        "scope_crept": "超出要求範圍",
+        "risk_not_worth_it": "風險不值得放行",
+        "needs_human_check": "需要人工檢查",
+        "incomplete_evidence": "證據不足"
+      },
+      "note_label": "備註（可選）",
+      "note_placeholder": "一句話，將顯示在時間線。",
+      "chip": {
+        "pass": "通過",
+        "reject": "駁回",
+        "conditional_pass": "有條件通過"
+      },
+      "conditional_open": "條件尚未解決；解決前該任務不應關閉。"
     }
   },
   "hover_card": {

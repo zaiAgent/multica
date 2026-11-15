@@ -77,7 +77,7 @@ describe("WorkflowHandoffConfirmDialog (MUL-7420)", () => {
     expect(previewWorkflowHandoff).toHaveBeenCalledWith("issue-1", "code_review");
 
     fireEvent.click(screen.getByRole("button", { name: "Move to Code review" }));
-    expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: true });
+    expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: true, reviewVerdict: null, reviewReasons: [], reviewNote: "" });
   });
 
   it("keeps the previous run when the stop box is cleared", async () => {
@@ -85,7 +85,7 @@ describe("WorkflowHandoffConfirmDialog (MUL-7420)", () => {
     const { onConfirm } = renderDialog();
     fireEvent.click(await screen.findByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Move to Code review" }));
-    expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: false });
+    expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: false, reviewVerdict: null, reviewReasons: [], reviewNote: "" });
   });
 
   it.each(["queued", "deferred"])("words a %s run as waiting and cancels it", async (status) => {
@@ -99,13 +99,43 @@ describe("WorkflowHandoffConfirmDialog (MUL-7420)", () => {
     expect(screen.queryByText(/still running/)).toBeNull();
     expect(screen.getByText(/Cancel Forge’s queued run/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Move to Code review" }));
-    expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: true });
+    expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: true, reviewVerdict: null, reviewReasons: [], reviewNote: "" });
   });
 
   it("applies without asking when the server finds no handoff", async () => {
     previewWorkflowHandoff.mockResolvedValue({ ...handoff, handoff: false, handler_type: null, handler_id: null });
     const { onConfirm } = renderDialog();
-    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: false }));
+    await waitFor(() =>
+      expect(onConfirm).toHaveBeenCalledWith({ stopPreviousRuns: false, reviewVerdict: null, reviewReasons: [], reviewNote: "" }),
+    );
     expect(screen.queryByText(/Move MUL-8121/)).toBeNull();
+  });
+
+  it("asks for the reviewer’s conclusion when the move leaves the in-review column", async () => {
+    // in_review → done hands off to nobody, but it is exactly the review
+    // moment: the dialog stays and records a verdict beside the move
+    // (MUL-8620, AR-04).
+    previewWorkflowHandoff.mockResolvedValue({
+      ...handoff,
+      handoff: false,
+      handler_type: null,
+      handler_id: null,
+      previous_runs: [],
+      from_status: "in_review",
+    });
+    const { onConfirm } = renderDialog();
+
+    expect(await screen.findByText(/Review conclusion/i)).toBeTruthy();
+    // A review exit applies only through the dialog’s confirm.
+    await waitFor(() => expect(screen.queryByText(/Move MUL-8121/)).not.toBeNull());
+    fireEvent.click(screen.getByRole("radio", { name: /Reject/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Below the quality bar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move to Code review" }));
+    expect(onConfirm).toHaveBeenCalledWith({
+      stopPreviousRuns: false,
+      reviewVerdict: "reject",
+      reviewReasons: ["quality_below_bar"],
+      reviewNote: "",
+    });
   });
 });

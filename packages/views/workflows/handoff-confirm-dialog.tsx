@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronDown, ChevronRight, TriangleAlert } from "@multica/ui/icons";
+import { ArrowRight, TriangleAlert } from "@multica/ui/icons";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useIssueStatuses } from "@multica/core/issue-statuses/hooks";
 import { workflowHandoffPreviewOptions } from "@multica/core/issue-workflows";
@@ -22,7 +22,9 @@ import { ActorAvatar } from "../common/actor-avatar";
 import { StatusIcon } from "../issues/components/status-icon";
 import { useStatusLabel } from "../issues/utils/status-label";
 import { useT } from "../i18n";
-import { BriefBlock } from "./handoff-form";
+import { PlainBriefCard } from "./plain-brief-card";
+import { type ReviewReason, type ReviewVerdict } from "./plain-brief";
+import { ReviewVerdictInput } from "./review-verdict";
 
 const FROM = "⁣from⁣";
 const TO = "⁣to⁣";
@@ -57,7 +59,14 @@ function useDuration() {
  * the issue enters the column it lands on there.
  *
  * When the preview finds no handoff after all (the handler cannot be resolved,
- * or the workflow changed), the move applies without asking.
+ * or the workflow changed), the move applies without asking — unless it leaves
+ * the in-review column, where the reviewer's conclusion is worth asking for
+ * (MUL-8620, AR-04): the dialog stays and records a review verdict beside
+ * the move.
+ *
+ * The brief itself reads through its plain-language layers (AR-01…03):
+ * a one-line conclusion with risk tags, the decision facts, and the raw
+ * evidence folded below.
  */
 export function WorkflowHandoffConfirmDialog({
   issue,
@@ -66,13 +75,21 @@ export function WorkflowHandoffConfirmDialog({
   onCancel,
   onConfirm,
 }: {
-  /** The issue being moved; null keeps the dialog closed. */
   issue: { id: string; identifier: string } | null;
   /** The status being moved to; ignored with `toProject`. */
   toStatus: string;
   toProject?: { id: string; title: string } | null;
   onCancel: () => void;
-  onConfirm: (options: { stopPreviousRuns: boolean }) => void;
+  onConfirm: (options: {
+    stopPreviousRuns: boolean;
+    /** The reviewer's conclusion ("pass" | "reject" | "conditional_pass"),
+     * set only when this dialog recorded one. */
+    reviewVerdict: ReviewVerdict | null;
+    /** The reason keys the reviewer picked ("quality_below_bar", …). */
+    reviewReasons: ReviewReason[];
+    /** The reviewer's one-line reason or conditions, set with a verdict. */
+    reviewNote: string;
+  }) => void;
 }) {
   const { t } = useT("issues");
   const wsId = useWorkspaceId();
@@ -81,24 +98,33 @@ export function WorkflowHandoffConfirmDialog({
   const { getActorName } = useActorName();
   const duration = useDuration();
   const [stop, setStop] = useState(true);
-  const [briefOpen, setBriefOpen] = useState(false);
+  const [verdict, setVerdict] = useState<ReviewVerdict>("pass");
+  const [reasons, setReasons] = useState<ReviewReason[]>([]);
+  const [note, setNote] = useState("");
   const open = issue !== null;
   const { data: preview, isPending, isError } = useQuery({
     ...workflowHandoffPreviewOptions(wsId, issue?.id ?? "", toProject ? "" : toStatus, toProject?.id),
     enabled: open,
   });
   const target = toProject ? (preview?.to_status ?? "") : toStatus;
+  // Leaving the in-review column is the review moment (AR-04): the dialog
+  // asks for the reviewer's conclusion even when the move itself needs no
+  // handoff confirmation — in_review → done hands off to nobody.
+  const reviewExit = preview?.from_status === "in_review";
 
   useEffect(() => {
     if (open) {
       setStop(true);
-      setBriefOpen(false);
+      setVerdict("pass");
+      setReasons([]);
+      setNote("");
     }
   }, [open, issue?.id, toStatus, toProject?.id]);
 
   // Nothing to confirm: apply as an ordinary status change.
   useEffect(() => {
-    if (open && preview && !preview.handoff) onConfirm({ stopPreviousRuns: false });
+    if (open && preview && !preview.handoff && !reviewExit)
+      onConfirm({ stopPreviousRuns: false, reviewVerdict: null, reviewReasons: [], reviewNote: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, preview]);
 
@@ -123,7 +149,6 @@ export function WorkflowHandoffConfirmDialog({
 
   const handlerType = preview?.handler_type ?? null;
   const handlerId = preview?.handler_id ?? null;
-  const handlerName = handlerType && handlerId ? getActorName(handlerType, handlerId) : "";
   const prevType = preview?.previous_assignee_type ?? null;
   const prevId = preview?.previous_assignee_id ?? null;
   const sameHandler = !!prevId && prevId === handlerId && prevType === handlerType;
@@ -154,7 +179,7 @@ export function WorkflowHandoffConfirmDialog({
   }
 
   return (
-    <Dialog open={open && !(preview && !preview.handoff)} onOpenChange={(v) => !v && onCancel()}>
+    <Dialog open={open && !(preview && !preview.handoff && !reviewExit)} onOpenChange={(v) => !v && onCancel()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
@@ -205,23 +230,20 @@ export function WorkflowHandoffConfirmDialog({
                 </p>
               </div>
             )}
-            {preview?.brief && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setBriefOpen((v) => !v)}
-                  aria-expanded={briefOpen}
-                  className="flex items-center gap-1 text-caption font-medium text-brand hover:underline"
-                >
-                  {briefOpen ? <ChevronDown aria-hidden className="size-3.5" /> : <ChevronRight aria-hidden className="size-3.5" />}
-                  {t(($) => $.workflows.confirm.brief_toggle, { name: handlerName })}
-                </button>
-                {briefOpen && (
-                  <div className="mt-2">
-                    <BriefBlock brief={preview.brief} />
-                  </div>
-                )}
-              </div>
+            {preview?.brief && <PlainBriefCard brief={preview.brief} />}
+            {reviewExit && (
+              <ReviewVerdictInput
+                verdict={verdict}
+                onVerdict={setVerdict}
+                reasons={reasons}
+                onToggleReason={(reason) =>
+                  setReasons((prev) =>
+                    prev.includes(reason) ? prev.filter((r) => r !== reason) : [...prev, reason],
+                  )
+                }
+                note={note}
+                onNote={setNote}
+              />
             )}
           </div>
         )}
@@ -232,7 +254,14 @@ export function WorkflowHandoffConfirmDialog({
           </Button>
           <Button
             disabled={isPending || isError}
-            onClick={() => onConfirm({ stopPreviousRuns: stop && runs.length > 0 && !sameHandler })}
+            onClick={() =>
+              onConfirm({
+                stopPreviousRuns: stop && runs.length > 0 && !sameHandler,
+                reviewVerdict: reviewExit ? verdict : null,
+                reviewReasons: reviewExit ? reasons : [],
+                reviewNote: reviewExit ? note : "",
+              })
+            }
           >
             {toProject
               ? t(($) => $.workflows.confirm.project_confirm, { project: toProject.title })
